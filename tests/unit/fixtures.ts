@@ -1,4 +1,5 @@
 import type { PropertyDef } from "@/lib/hubspot/properties";
+import type { SearchRow } from "@/lib/hubspot/search";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,4 +36,9 @@ export function dropdown(name: string, labels: string[], overrides: Partial<Prop
     options: labels.map((label) => ({ label, value: label, hidden: false })),
     ...overrides,
   });
+}
+
+// A search result row with the given field values.
+export function row(id: string, properties: Record<string, string | null>): SearchRow {
+  return { id, properties };
 }

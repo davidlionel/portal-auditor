@@ -8,7 +8,7 @@ const SCOPES = [
   },
   {
     scopes: ["crm.objects.contacts.read", "crm.objects.companies.read", "crm.objects.deals.read"],
-    why: "Count how many records fill each custom property. Only totals are read; no record contents are kept.",
+    why: "Count records for fill rates and record checks, and read name, company, email and domain on recent records to find duplicates. Values stay in server memory during the scan; the report shows record IDs only.",
   },
 ];
 

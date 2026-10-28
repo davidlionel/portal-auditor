@@ -1,7 +1,7 @@
 "use server";
 
 import type { HubSpotErrorKind } from "@/lib/hubspot/client";
-import { runPropertiesScan, type ScanReport } from "@/lib/scan";
+import { runScan as runPortalScan, type ScanReport } from "@/lib/scan";
 
 export type ScanState =
   | { status: "idle" }
@@ -34,7 +34,7 @@ export async function runScan(_prev: ScanState, formData: FormData): Promise<Sca
     return { status: "error", message: ERROR_MESSAGES.malformed };
   }
 
-  const result = await runPropertiesScan(token);
+  const result = await runPortalScan(token);
   if (!result.ok) return { status: "error", message: ERROR_MESSAGES[result.kind] };
 
   return { status: "done", report: result.report };

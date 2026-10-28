@@ -9,6 +9,11 @@ export type ChecksConfig = {
     nearMinLength: number;
     nearMaxDistance: number;
   };
+  records: {
+    recordWindow: number;
+    staleDealDays: number;
+    typoDomains: string[];
+  };
 };
 
 // Thresholds for the audit checks. The reasoning for each value lives in
@@ -27,5 +32,29 @@ export const CHECKS_CONFIG: ChecksConfig = {
     // Edit distance only applies to labels at least this long.
     nearMinLength: 8,
     nearMaxDistance: 2,
+  },
+  records: {
+    // Row-level checks (duplicates, malformed email) read only this many of
+    // the most recently created records per object. 10,000 is the Search
+    // API's ceiling for one query.
+    recordWindow: 10_000,
+    // An open deal with no stage change for this long is stale.
+    staleDealDays: 30,
+    // Valid-looking email domains that are almost always typos.
+    typoDomains: [
+      "gmial.com",
+      "gmai.com",
+      "gnail.com",
+      "gmail.co",
+      "gmail.con",
+      "hotmial.com",
+      "hotmai.com",
+      "hotmail.co",
+      "yaho.com",
+      "yahoo.co",
+      "outlok.com",
+      "outllook.com",
+      "iclod.com",
+    ],
   },
 };

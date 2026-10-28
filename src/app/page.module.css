@@ -228,3 +228,14 @@
 .scopeTable code {
   overflow-wrap: anywhere;
 }
+
+.categoryHeading {
+  margin-top: 8px;
+  font-size: 1.125rem;
+}
+
+.recordLink {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
