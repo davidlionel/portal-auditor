@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { liveScanEnabled } from "@/lib/live-scan";
 import { simulatorEnabled } from "@/lib/simulator/guard";
 import { ConnectForm } from "./connect-form";
 import styles from "./page.module.css";
@@ -13,13 +15,43 @@ const SCOPES = [
   },
 ];
 
+const RUN_LOCALLY_URL = "https://github.com/davidlionel/portal-auditor#run-it-on-your-own-portal";
+
 export default function Home() {
+  // Decided on the server. The public deployment leaves live scanning off,
+  // so it never receives a service key. This page is static, so it reads the
+  // setting at build time; /api/scan checks it again on every request.
+  const liveScan = liveScanEnabled();
+  const simulator = simulatorEnabled();
   return (
     <main className={styles.main}>
       <header className={styles.header}>
         <h1>Portal Health Auditor</h1>
-        <p>Scan a HubSpot portal&apos;s properties with a read-only service key.</p>
+        <p>
+          Scores a HubSpot portal&apos;s data health out of 100 with a read-only service key, and
+          ranks the fixes that matter most.
+        </p>
       </header>
+
+      <section className={styles.card}>
+        <h2>{liveScan ? "See an example first" : "See what it finds"}</h2>
+        <p className={styles.note} style={{ marginBottom: 12 }}>
+          A full report from a HubSpot developer test portal with planted problems: duplicates,
+          missing data, stale deals and messy properties.
+        </p>
+        <div className={styles.row}>
+          <Link className={styles.button} href="/demo">
+            View sample report
+          </Link>
+        </div>
+        {!liveScan && (
+          <p className={`${styles.note} ${styles.exportNote}`}>
+            This site shows the sample only and never asks for a service key. To scan your own
+            portal, <a className={styles.recordLink} href={RUN_LOCALLY_URL}>run it on your machine</a>;
+            it takes a few minutes to set up.
+          </p>
+        )}
+      </section>
 
       <section className={styles.card}>
         <h2>What your service key needs and why</h2>
@@ -51,7 +83,7 @@ export default function Home() {
         </table>
       </section>
 
-      <ConnectForm simulatorAvailable={simulatorEnabled()} />
+      {(liveScan || simulator) && <ConnectForm liveScan={liveScan} simulatorAvailable={simulator} />}
     </main>
   );
 }

@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "tsx --test \"tests/unit/*.test.ts\"",
     "test:scale": "tsx tests/scale/simulated-250k.ts",
-    "check:simulator-prod": "next build && tsx tests/prod/simulator-blocked.ts"
+    "check:simulator-prod": "next build && tsx tests/prod/simulator-blocked.ts",
+    "demo:snapshot": "tsx --env-file-if-exists=.env.local scripts/demo-snapshot.ts",
+    "check:deploy": "tsx tests/prod/deployed.ts"
   },
   "dependencies": {
     "@hubspot/api-client": "^14.0.1",
@@ -25,5 +27,8 @@
     "eslint-config-next": "16.4.3",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.9.0"
   }
 }

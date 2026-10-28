@@ -17,7 +17,9 @@ function download(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ExportButtons({ report }: { report: ScanReport }) {
+// recordLinks is false on the public sample, whose links would only lead
+// to a HubSpot login.
+export function ExportButtons({ report, recordLinks = true }: { report: ScanReport; recordLinks?: boolean }) {
   const prefix = `portal-${report.portal.portalId}`;
   return (
     <div className={styles.card}>
@@ -35,7 +37,7 @@ export function ExportButtons({ report }: { report: ScanReport }) {
             key={objectType}
             type="button"
             className={styles.secondaryButton}
-            onClick={() => download(`${prefix}-work-list-${objectType}.csv`, workListCsv(report, objectType))}
+            onClick={() => download(`${prefix}-work-list-${objectType}.csv`, workListCsv(report, objectType, { recordLinks }))}
           >
             Work list: {OBJECT_LABELS[objectType]} (CSV)
           </button>
@@ -44,6 +46,7 @@ export function ExportButtons({ report }: { report: ScanReport }) {
       <p className={`${styles.note} ${styles.exportNote}`}>
         Files are built in your browser from this report; nothing is stored. Work lists hold
         record IDs and HubSpot links only, one file per object, ready to import by Record ID.
+        {!recordLinks && " In the sample, the link column is left blank."}
       </p>
     </div>
   );

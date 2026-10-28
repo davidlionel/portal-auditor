@@ -1,0 +1,1774 @@
+{
+  "scannedAt": "2026-10-28T15:40:16.917Z",
+  "appVersion": "0.1.0",
+  "report": {
+    "portal": {
+      "portalId": 247313672,
+      "accountType": "DEVELOPER_TEST",
+      "timeZone": "US/Eastern",
+      "companyCurrency": "USD",
+      "uiDomain": "app-na2.hubspot.com",
+      "dataHostingLocation": "na2"
+    },
+    "scannedObjects": [
+      "contacts",
+      "companies",
+      "deals"
+    ],
+    "notes": [
+      "Contacts duplicate and email checks covered all 222 contacts. HubSpot's own duplicate tool scans the whole portal: CRM > Contacts, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
+      "Companies duplicate checks covered all 139 companies. HubSpot's own duplicate tool scans the whole portal: CRM > Companies, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)."
+    ],
+    "findings": [
+      {
+        "checkId": "deals.missing-amount",
+        "title": "Open or won deals with no amount",
+        "severity": "high",
+        "category": "Deals",
+        "objectType": "deals",
+        "count": 6,
+        "affected": 6,
+        "population": 275,
+        "samples": [],
+        "recordSamples": [
+          [
+            "359604015802"
+          ],
+          [
+            "359607583463"
+          ],
+          [
+            "348479698627"
+          ],
+          [
+            "348583302875"
+          ],
+          [
+            "348585075439"
+          ],
+          [
+            "348594517699"
+          ]
+        ],
+        "records": [
+          {
+            "id": "359604015802"
+          },
+          {
+            "id": "359607583463"
+          },
+          {
+            "id": "348479698627"
+          },
+          {
+            "id": "348583302875"
+          },
+          {
+            "id": "348585075439"
+          },
+          {
+            "id": "348594517699"
+          }
+        ],
+        "why": "Deals without an amount count as zero in the forecast and revenue reports.",
+        "fix": "Make Amount required at the deal stages where it's known, then fill it in on these deals."
+      },
+      {
+        "checkId": "companies.duplicate-domain",
+        "title": "Companies sharing the same domain",
+        "severity": "high",
+        "category": "Companies",
+        "objectType": "companies",
+        "why": "Contacts and deals get split across copies of the same company, so account views and revenue roll-ups are incomplete.",
+        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Companies, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
+        "count": 3,
+        "affected": 10,
+        "population": 139,
+        "samples": [],
+        "recordSamples": [
+          [
+            "351889741521",
+            "351885541079",
+            "351853800165",
+            "351889490670",
+            "351885432557"
+          ],
+          [
+            "357202860749",
+            "357246073533"
+          ],
+          [
+            "357238874860",
+            "357528543960"
+          ]
+        ],
+        "records": [
+          {
+            "id": "351889741521",
+            "group": 1
+          },
+          {
+            "id": "351885541079",
+            "group": 1
+          },
+          {
+            "id": "351853800165",
+            "group": 1
+          },
+          {
+            "id": "351889490670",
+            "group": 1
+          },
+          {
+            "id": "351885432557",
+            "group": 1
+          },
+          {
+            "id": "351883204339",
+            "group": 1
+          },
+          {
+            "id": "357202860749",
+            "group": 2
+          },
+          {
+            "id": "357246073533",
+            "group": 2
+          },
+          {
+            "id": "357238874860",
+            "group": 3
+          },
+          {
+            "id": "357528543960",
+            "group": 3
+          }
+        ]
+      },
+      {
+        "checkId": "contacts.duplicate-name-company",
+        "title": "Likely duplicate contacts (same name and company)",
+        "severity": "high",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "why": "Duplicates split activity history between records, so owners miss context and reports double-count people.",
+        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Contacts, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
+        "count": 2,
+        "affected": 4,
+        "population": 222,
+        "samples": [],
+        "recordSamples": [
+          [
+            "578831438551",
+            "578829614799"
+          ],
+          [
+            "579380759253",
+            "579467783923"
+          ]
+        ],
+        "records": [
+          {
+            "id": "578831438551",
+            "group": 1
+          },
+          {
+            "id": "578829614799",
+            "group": 1
+          },
+          {
+            "id": "579380759253",
+            "group": 2
+          },
+          {
+            "id": "579467783923",
+            "group": 2
+          }
+        ]
+      },
+      {
+        "checkId": "properties.dropdown-variants",
+        "title": "Dropdown options that differ only by case, spacing or punctuation",
+        "severity": "high",
+        "category": "Properties",
+        "objectType": "contacts",
+        "count": 1,
+        "affected": 1,
+        "population": 4,
+        "samples": [
+          "audit_test_source: Webinar / webinar"
+        ],
+        "why": "Records split across variants like Webinar / webinar, so segments, workflows and reports miss some of them.",
+        "fix": "Keep one option, bulk-update records from the others to it, then delete the extra options."
+      },
+      {
+        "checkId": "deals.stale",
+        "title": "Open deals with no stage change in 30+ days",
+        "severity": "medium",
+        "category": "Deals",
+        "objectType": "deals",
+        "count": 154,
+        "affected": 154,
+        "population": 158,
+        "samples": [],
+        "recordSamples": [
+          [
+            "348031925960"
+          ],
+          [
+            "348051666632"
+          ],
+          [
+            "348479698629"
+          ],
+          [
+            "348544800478"
+          ],
+          [
+            "348550111963"
+          ],
+          [
+            "348567195344"
+          ],
+          [
+            "348583302880"
+          ],
+          [
+            "348544800477"
+          ],
+          [
+            "348031925957"
+          ],
+          [
+            "348320295635"
+          ]
+        ],
+        "records": [
+          {
+            "id": "348031925960"
+          },
+          {
+            "id": "348051666632"
+          },
+          {
+            "id": "348479698629"
+          },
+          {
+            "id": "348544800478"
+          },
+          {
+            "id": "348550111963"
+          },
+          {
+            "id": "348567195344"
+          },
+          {
+            "id": "348583302880"
+          },
+          {
+            "id": "348544800477"
+          },
+          {
+            "id": "348031925957"
+          },
+          {
+            "id": "348320295635"
+          },
+          {
+            "id": "348339139267"
+          },
+          {
+            "id": "348583302878"
+          },
+          {
+            "id": "348459950829"
+          },
+          {
+            "id": "348479698625"
+          },
+          {
+            "id": "348550111961"
+          },
+          {
+            "id": "348567195343"
+          },
+          {
+            "id": "348051666627"
+          },
+          {
+            "id": "348051666628"
+          },
+          {
+            "id": "348459950828"
+          },
+          {
+            "id": "348567195341"
+          },
+          {
+            "id": "348583302879"
+          },
+          {
+            "id": "348600372949"
+          },
+          {
+            "id": "348031925955"
+          },
+          {
+            "id": "348544800474"
+          },
+          {
+            "id": "348339139265"
+          },
+          {
+            "id": "348607110850"
+          },
+          {
+            "id": "348459950826"
+          },
+          {
+            "id": "348550111959"
+          },
+          {
+            "id": "348551880401"
+          },
+          {
+            "id": "348581516007"
+          },
+          {
+            "id": "348183713475"
+          },
+          {
+            "id": "348329117377"
+          },
+          {
+            "id": "348548281039"
+          },
+          {
+            "id": "348305883876"
+          },
+          {
+            "id": "348139890373"
+          },
+          {
+            "id": "348170103509"
+          },
+          {
+            "id": "348318372583"
+          },
+          {
+            "id": "348033524422"
+          },
+          {
+            "id": "348185512643"
+          },
+          {
+            "id": "348592723659"
+          },
+          {
+            "id": "348340819672"
+          },
+          {
+            "id": "348329117370"
+          },
+          {
+            "id": "348589134553"
+          },
+          {
+            "id": "348592723655"
+          },
+          {
+            "id": "348122869461"
+          },
+          {
+            "id": "348581516001"
+          },
+          {
+            "id": "348130894572"
+          },
+          {
+            "id": "348548281031"
+          },
+          {
+            "id": "348592723654"
+          },
+          {
+            "id": "348329116409"
+          },
+          {
+            "id": "348329116408"
+          },
+          {
+            "id": "348548281030"
+          },
+          {
+            "id": "348098691794"
+          },
+          {
+            "id": "348305883869"
+          },
+          {
+            "id": "348589134551"
+          },
+          {
+            "id": "348098691792"
+          },
+          {
+            "id": "348033524414"
+          },
+          {
+            "id": "348098691793"
+          },
+          {
+            "id": "348122869460"
+          },
+          {
+            "id": "348183713466"
+          },
+          {
+            "id": "348305883868"
+          },
+          {
+            "id": "348577884916"
+          },
+          {
+            "id": "348226417381"
+          },
+          {
+            "id": "348533932751"
+          },
+          {
+            "id": "348551880396"
+          },
+          {
+            "id": "348318372578"
+          },
+          {
+            "id": "348577884915"
+          },
+          {
+            "id": "348594517703"
+          },
+          {
+            "id": "348185512639"
+          },
+          {
+            "id": "348533932750"
+          },
+          {
+            "id": "348340819666"
+          },
+          {
+            "id": "348594517702"
+          },
+          {
+            "id": "348124583638"
+          },
+          {
+            "id": "348139890369"
+          },
+          {
+            "id": "348318372576"
+          },
+          {
+            "id": "348318372577"
+          },
+          {
+            "id": "348325507821"
+          },
+          {
+            "id": "348577884914"
+          },
+          {
+            "id": "348596311786"
+          },
+          {
+            "id": "348031925953"
+          },
+          {
+            "id": "348185512638"
+          },
+          {
+            "id": "348325507820"
+          },
+          {
+            "id": "348551880394"
+          },
+          {
+            "id": "348551880395"
+          },
+          {
+            "id": "348051666624"
+          },
+          {
+            "id": "348185512637"
+          },
+          {
+            "id": "348226417380"
+          },
+          {
+            "id": "348340819665"
+          },
+          {
+            "id": "348544800471"
+          },
+          {
+            "id": "348588676848"
+          },
+          {
+            "id": "348594517701"
+          },
+          {
+            "id": "348170103502"
+          },
+          {
+            "id": "348139890368"
+          },
+          {
+            "id": "348318372575"
+          },
+          {
+            "id": "348533932749"
+          },
+          {
+            "id": "348340819664"
+          },
+          {
+            "id": "348139890367"
+          },
+          {
+            "id": "348169704172"
+          },
+          {
+            "id": "348305418946"
+          },
+          {
+            "id": "348442386135"
+          },
+          {
+            "id": "348282048203"
+          },
+          {
+            "id": "348051159778"
+          },
+          {
+            "id": "348098249418"
+          },
+          {
+            "id": "348435222251"
+          },
+          {
+            "id": "348328680163"
+          },
+          {
+            "id": "348130471657"
+          },
+          {
+            "id": "348442386132"
+          },
+          {
+            "id": "348124188394"
+          },
+          {
+            "id": "348226000594"
+          },
+          {
+            "id": "348435222252"
+          },
+          {
+            "id": "348375918305"
+          },
+          {
+            "id": "348375918300"
+          },
+          {
+            "id": "348130471656"
+          },
+          {
+            "id": "348122421988"
+          },
+          {
+            "id": "348282048211"
+          },
+          {
+            "id": "348282048204"
+          },
+          {
+            "id": "348051159774"
+          },
+          {
+            "id": "348317969119"
+          },
+          {
+            "id": "348169704173"
+          },
+          {
+            "id": "348375918303"
+          },
+          {
+            "id": "348282048214"
+          },
+          {
+            "id": "348185082603"
+          },
+          {
+            "id": "348130471655"
+          },
+          {
+            "id": "348388469444"
+          },
+          {
+            "id": "348051159780"
+          },
+          {
+            "id": "348392043232"
+          },
+          {
+            "id": "348130471653"
+          },
+          {
+            "id": "348319801074"
+          },
+          {
+            "id": "348124188395"
+          },
+          {
+            "id": "348388469448"
+          },
+          {
+            "id": "348328680166"
+          },
+          {
+            "id": "348445986533"
+          },
+          {
+            "id": "348226000595"
+          },
+          {
+            "id": "348445986537"
+          },
+          {
+            "id": "348122421990"
+          },
+          {
+            "id": "348445986535"
+          },
+          {
+            "id": "348340408035"
+          },
+          {
+            "id": "348122421987"
+          },
+          {
+            "id": "348226000596"
+          },
+          {
+            "id": "348305418950"
+          },
+          {
+            "id": "348124188393"
+          },
+          {
+            "id": "348282048205"
+          },
+          {
+            "id": "348340408033"
+          },
+          {
+            "id": "348375918301"
+          },
+          {
+            "id": "348325107417"
+          },
+          {
+            "id": "348305418948"
+          },
+          {
+            "id": "348428026598"
+          },
+          {
+            "id": "348139473641"
+          },
+          {
+            "id": "348435222250"
+          },
+          {
+            "id": "348325107420"
+          },
+          {
+            "id": "348325107418"
+          },
+          {
+            "id": "348393857780"
+          },
+          {
+            "id": "348340408032"
+          },
+          {
+            "id": "348282048207"
+          }
+        ],
+        "why": "Deals stuck in one stage make the pipeline look bigger than it is.",
+        "fix": "Review each deal with its owner: move it forward, close it as lost, or update the close date."
+      },
+      {
+        "checkId": "deals.missing-close-date",
+        "title": "Open deals with no close date",
+        "severity": "medium",
+        "category": "Deals",
+        "objectType": "deals",
+        "count": 59,
+        "affected": 59,
+        "population": 158,
+        "samples": [],
+        "recordSamples": [
+          [
+            "359611148996"
+          ],
+          [
+            "359257464510"
+          ],
+          [
+            "348169704172"
+          ],
+          [
+            "348305418946"
+          ],
+          [
+            "348442386135"
+          ],
+          [
+            "348282048203"
+          ],
+          [
+            "348051159778"
+          ],
+          [
+            "348098249418"
+          ],
+          [
+            "348435222251"
+          ],
+          [
+            "348328680163"
+          ]
+        ],
+        "records": [
+          {
+            "id": "359611148996"
+          },
+          {
+            "id": "359257464510"
+          },
+          {
+            "id": "348169704172"
+          },
+          {
+            "id": "348305418946"
+          },
+          {
+            "id": "348442386135"
+          },
+          {
+            "id": "348282048203"
+          },
+          {
+            "id": "348051159778"
+          },
+          {
+            "id": "348098249418"
+          },
+          {
+            "id": "348435222251"
+          },
+          {
+            "id": "348328680163"
+          },
+          {
+            "id": "348130471657"
+          },
+          {
+            "id": "348442386132"
+          },
+          {
+            "id": "348124188394"
+          },
+          {
+            "id": "348226000594"
+          },
+          {
+            "id": "348435222252"
+          },
+          {
+            "id": "348375918305"
+          },
+          {
+            "id": "348375918300"
+          },
+          {
+            "id": "348130471656"
+          },
+          {
+            "id": "348122421988"
+          },
+          {
+            "id": "348282048211"
+          },
+          {
+            "id": "348282048204"
+          },
+          {
+            "id": "348051159774"
+          },
+          {
+            "id": "348317969119"
+          },
+          {
+            "id": "348169704173"
+          },
+          {
+            "id": "348375918303"
+          },
+          {
+            "id": "348282048214"
+          },
+          {
+            "id": "348185082603"
+          },
+          {
+            "id": "348130471655"
+          },
+          {
+            "id": "348388469444"
+          },
+          {
+            "id": "348051159780"
+          },
+          {
+            "id": "348392043232"
+          },
+          {
+            "id": "348130471653"
+          },
+          {
+            "id": "348319801074"
+          },
+          {
+            "id": "348124188395"
+          },
+          {
+            "id": "348388469448"
+          },
+          {
+            "id": "348328680166"
+          },
+          {
+            "id": "348445986533"
+          },
+          {
+            "id": "348226000595"
+          },
+          {
+            "id": "348445986537"
+          },
+          {
+            "id": "348122421990"
+          },
+          {
+            "id": "348445986535"
+          },
+          {
+            "id": "348340408035"
+          },
+          {
+            "id": "348122421987"
+          },
+          {
+            "id": "348226000596"
+          },
+          {
+            "id": "348305418950"
+          },
+          {
+            "id": "348124188393"
+          },
+          {
+            "id": "348282048205"
+          },
+          {
+            "id": "348340408033"
+          },
+          {
+            "id": "348375918301"
+          },
+          {
+            "id": "348325107417"
+          },
+          {
+            "id": "348305418948"
+          },
+          {
+            "id": "348428026598"
+          },
+          {
+            "id": "348139473641"
+          },
+          {
+            "id": "348435222250"
+          },
+          {
+            "id": "348325107420"
+          },
+          {
+            "id": "348325107418"
+          },
+          {
+            "id": "348393857780"
+          },
+          {
+            "id": "348340408032"
+          },
+          {
+            "id": "348282048207"
+          }
+        ],
+        "why": "Deals without a close date fall out of every forecast period.",
+        "fix": "Make Close date required when a deal is created, then set an expected date on these deals."
+      },
+      {
+        "checkId": "contacts.customer-without-won-deal",
+        "title": "Customers with no closed-won deal",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "count": 35,
+        "affected": 35,
+        "population": 66,
+        "samples": [],
+        "recordSamples": [
+          [
+            "579375740605"
+          ],
+          [
+            "578832944889"
+          ],
+          [
+            "551325605603"
+          ],
+          [
+            "551447555830"
+          ],
+          [
+            "551529651944"
+          ],
+          [
+            "551529651945"
+          ],
+          [
+            "551553671883"
+          ],
+          [
+            "551553671884"
+          ],
+          [
+            "551528563400"
+          ],
+          [
+            "551526679257"
+          ]
+        ],
+        "records": [
+          {
+            "id": "579375740605"
+          },
+          {
+            "id": "578832944889"
+          },
+          {
+            "id": "551325605603"
+          },
+          {
+            "id": "551447555830"
+          },
+          {
+            "id": "551529651944"
+          },
+          {
+            "id": "551529651945"
+          },
+          {
+            "id": "551553671883"
+          },
+          {
+            "id": "551553671884"
+          },
+          {
+            "id": "551528563400"
+          },
+          {
+            "id": "551526679257"
+          },
+          {
+            "id": "551526679259"
+          },
+          {
+            "id": "551526679261"
+          },
+          {
+            "id": "551528563401"
+          },
+          {
+            "id": "551553671881"
+          },
+          {
+            "id": "551554124510"
+          },
+          {
+            "id": "551287448261"
+          },
+          {
+            "id": "551486091996"
+          },
+          {
+            "id": "551529716469"
+          },
+          {
+            "id": "551302278865"
+          },
+          {
+            "id": "551431085782"
+          },
+          {
+            "id": "551486091994"
+          },
+          {
+            "id": "551511285435"
+          },
+          {
+            "id": "551553902328"
+          },
+          {
+            "id": "551256296151"
+          },
+          {
+            "id": "551528617662"
+          },
+          {
+            "id": "551238788845"
+          },
+          {
+            "id": "551528617660"
+          },
+          {
+            "id": "551553902325"
+          },
+          {
+            "id": "551553902326"
+          },
+          {
+            "id": "551456367347"
+          },
+          {
+            "id": "551456367348"
+          },
+          {
+            "id": "551458057955"
+          },
+          {
+            "id": "551529716468"
+          },
+          {
+            "id": "551551723216"
+          },
+          {
+            "id": "551458057957"
+          }
+        ],
+        "why": "Customer counts and revenue attribution disagree when contacts are Customers with no won deal behind them.",
+        "fix": "Check each contact: associate the won deal (a deal on the company alone doesn't count here), or move the contact back to the right stage."
+      },
+      {
+        "checkId": "contacts.missing-email",
+        "title": "Contacts with no email address",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "count": 11,
+        "affected": 11,
+        "population": 222,
+        "samples": [],
+        "recordSamples": [
+          [
+            "579377999576"
+          ],
+          [
+            "579372335841"
+          ],
+          [
+            "568236428015"
+          ],
+          [
+            "568209101517"
+          ],
+          [
+            "567127507683"
+          ],
+          [
+            "567145808612"
+          ],
+          [
+            "567141062361"
+          ],
+          [
+            "567141319354"
+          ],
+          [
+            "567141172975"
+          ],
+          [
+            "567140783836"
+          ]
+        ],
+        "records": [
+          {
+            "id": "579377999576"
+          },
+          {
+            "id": "579372335841"
+          },
+          {
+            "id": "568236428015"
+          },
+          {
+            "id": "568209101517"
+          },
+          {
+            "id": "567127507683"
+          },
+          {
+            "id": "567145808612"
+          },
+          {
+            "id": "567141062361"
+          },
+          {
+            "id": "567141319354"
+          },
+          {
+            "id": "567141172975"
+          },
+          {
+            "id": "567140783836"
+          },
+          {
+            "id": "567142329068"
+          }
+        ],
+        "why": "Contacts without an email can't be emailed, and HubSpot can't dedupe them by email.",
+        "fix": "Find the email from the source system or the owner, or archive contacts nobody can reach."
+      },
+      {
+        "checkId": "properties.duplicate-labels",
+        "title": "Properties with the same label",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "contacts",
+        "count": 3,
+        "affected": 4,
+        "population": 11,
+        "samples": [
+          "combined_score_10_15_2026_12_35_pm_engagement (\"Engagement Score\") / engagement_score (\"Engagement Score\")",
+          "combined_score_10_15_2026_12_35_pm_total (\"Total Score\") / total_score (\"Total Score\")",
+          "lead_source_test (\"Lead Source Test\") / lead_source_test_2 (\"Lead source test\")"
+        ],
+        "why": "Users can't tell which field to use, so data splits across both and reports undercount.",
+        "fix": "Pick one property to keep, migrate values from the other, then archive the duplicate."
+      },
+      {
+        "checkId": "contacts.missing-lifecycle-stage",
+        "title": "Contacts with no lifecycle stage",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "count": 3,
+        "affected": 3,
+        "population": 222,
+        "samples": [],
+        "recordSamples": [
+          [
+            "578813461219"
+          ],
+          [
+            "578813461218"
+          ],
+          [
+            "578992065215"
+          ]
+        ],
+        "records": [
+          {
+            "id": "578813461219"
+          },
+          {
+            "id": "578813461218"
+          },
+          {
+            "id": "578992065215"
+          }
+        ],
+        "why": "Contacts without a stage drop out of funnel reports and stage-based workflows.",
+        "fix": "Set a default stage on forms and imports, then bulk-update these contacts to the right stage."
+      },
+      {
+        "checkId": "contacts.malformed-email",
+        "title": "Contacts with a malformed or mistyped email",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "count": 2,
+        "affected": 2,
+        "population": 222,
+        "samples": [],
+        "recordSamples": [
+          [
+            "579372334782"
+          ],
+          [
+            "579031590648"
+          ]
+        ],
+        "records": [
+          {
+            "id": "579372334782"
+          },
+          {
+            "id": "579031590648"
+          }
+        ],
+        "why": "Emails to these addresses bounce, which hurts sender reputation, and the real person never hears from you.",
+        "fix": "Correct each address (gmial.com is almost always gmail.com), and add email validation to the forms that created them."
+      },
+      {
+        "checkId": "properties.near-zero-fill",
+        "title": "Custom properties filled on under 1% of records",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "contacts",
+        "count": 1,
+        "affected": 1,
+        "population": 2,
+        "samples": [
+          "sync_status (0.45%)"
+        ],
+        "why": "Unused fields clutter forms and records, and reports built on them show misleading blanks.",
+        "fix": "Confirm nobody relies on each one, then archive it or start populating it through a form or workflow."
+      },
+      {
+        "checkId": "companies.no-contacts",
+        "title": "Companies with no associated contacts",
+        "severity": "low",
+        "category": "Companies",
+        "objectType": "companies",
+        "count": 21,
+        "affected": 21,
+        "population": 139,
+        "samples": [],
+        "recordSamples": [
+          [
+            "357249679053"
+          ],
+          [
+            "357237053120"
+          ],
+          [
+            "351614274237"
+          ],
+          [
+            "351614379707"
+          ],
+          [
+            "351484253931"
+          ],
+          [
+            "351614607082"
+          ],
+          [
+            "351617705691"
+          ],
+          [
+            "351484253930"
+          ],
+          [
+            "346241408730"
+          ],
+          [
+            "346417555138"
+          ]
+        ],
+        "records": [
+          {
+            "id": "357249679053"
+          },
+          {
+            "id": "357237053120"
+          },
+          {
+            "id": "351614274237"
+          },
+          {
+            "id": "351614379707"
+          },
+          {
+            "id": "351484253931"
+          },
+          {
+            "id": "351614607082"
+          },
+          {
+            "id": "351617705691"
+          },
+          {
+            "id": "351484253930"
+          },
+          {
+            "id": "346241408730"
+          },
+          {
+            "id": "346417555138"
+          },
+          {
+            "id": "346264688350"
+          },
+          {
+            "id": "346200499919"
+          },
+          {
+            "id": "346522233543"
+          },
+          {
+            "id": "346552617687"
+          },
+          {
+            "id": "346449582841"
+          },
+          {
+            "id": "346515091138"
+          },
+          {
+            "id": "346201618112"
+          },
+          {
+            "id": "346262361826"
+          },
+          {
+            "id": "346302691034"
+          },
+          {
+            "id": "346231727859"
+          },
+          {
+            "id": "346290276033"
+          }
+        ],
+        "why": "Empty companies inflate account counts and usually mean contacts were never linked to them.",
+        "fix": "Turn on automatic company association by email domain, associate the right contacts, or archive the empty companies."
+      },
+      {
+        "checkId": "properties.no-description",
+        "title": "Custom properties with no description",
+        "severity": "low",
+        "category": "Properties",
+        "objectType": "contacts",
+        "count": 10,
+        "affected": 10,
+        "population": 11,
+        "samples": [
+          "audit_test_source",
+          "engagement_last_decayed",
+          "engagement_score",
+          "lead_source_test",
+          "lead_source_test_2",
+          "negative_score",
+          "routing_quadrant",
+          "sql_rejection_reason",
+          "sync_status",
+          "total_score"
+        ],
+        "why": "Without a description, users guess what a field means and fill it inconsistently.",
+        "fix": "Add a one-line description to each property saying what it holds and who fills it."
+      },
+      {
+        "checkId": "properties.no-description",
+        "title": "Custom properties with no description",
+        "severity": "low",
+        "category": "Properties",
+        "objectType": "companies",
+        "count": 7,
+        "affected": 7,
+        "population": 13,
+        "samples": [
+          "fit_industry_points",
+          "fit_score",
+          "fit_signal_points",
+          "fit_size_points",
+          "has_ops_person",
+          "open_job_count",
+          "segment"
+        ],
+        "why": "Without a description, users guess what a field means and fill it inconsistently.",
+        "fix": "Add a one-line description to each property saying what it holds and who fills it."
+      },
+      {
+        "checkId": "properties.no-description",
+        "title": "Custom properties with no description",
+        "severity": "low",
+        "category": "Properties",
+        "objectType": "deals",
+        "count": 4,
+        "affected": 4,
+        "population": 7,
+        "samples": [
+          "deal_source",
+          "imported_create_date",
+          "rep_name",
+          "skipped_qualification"
+        ],
+        "why": "Without a description, users guess what a field means and fill it inconsistently.",
+        "fix": "Add a one-line description to each property saying what it holds and who fills it."
+      }
+    ],
+    "checks": [
+      {
+        "checkId": "properties.no-description",
+        "title": "Custom properties with no description",
+        "severity": "low",
+        "category": "Properties",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 10,
+        "population": 11
+      },
+      {
+        "checkId": "properties.duplicate-labels",
+        "title": "Properties with the same label",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 4,
+        "population": 11
+      },
+      {
+        "checkId": "properties.near-duplicate-labels",
+        "title": "Properties with near-identical labels",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 0,
+        "population": 11
+      },
+      {
+        "checkId": "properties.dropdown-variants",
+        "title": "Dropdown options that differ only by case, spacing or punctuation",
+        "severity": "high",
+        "category": "Properties",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 1,
+        "population": 4
+      },
+      {
+        "checkId": "properties.dropdown-plural-variants",
+        "title": "Dropdown options that are singular and plural of each other",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 0,
+        "population": 4
+      },
+      {
+        "checkId": "properties.near-zero-fill",
+        "title": "Custom properties filled on under 1% of records",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 1,
+        "population": 2
+      },
+      {
+        "checkId": "contacts.missing-lifecycle-stage",
+        "title": "Contacts with no lifecycle stage",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 3,
+        "population": 222
+      },
+      {
+        "checkId": "contacts.customer-without-won-deal",
+        "title": "Customers with no closed-won deal",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 35,
+        "population": 66
+      },
+      {
+        "checkId": "contacts.missing-email",
+        "title": "Contacts with no email address",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 11,
+        "population": 222
+      },
+      {
+        "checkId": "contacts.duplicate-name-company",
+        "title": "Likely duplicate contacts (same name and company)",
+        "severity": "high",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 4,
+        "population": 222
+      },
+      {
+        "checkId": "contacts.malformed-email",
+        "title": "Contacts with a malformed or mistyped email",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 2,
+        "population": 222
+      },
+      {
+        "checkId": "properties.no-description",
+        "title": "Custom properties with no description",
+        "severity": "low",
+        "category": "Properties",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 7,
+        "population": 13
+      },
+      {
+        "checkId": "properties.duplicate-labels",
+        "title": "Properties with the same label",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 0,
+        "population": 13
+      },
+      {
+        "checkId": "properties.near-duplicate-labels",
+        "title": "Properties with near-identical labels",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 0,
+        "population": 13
+      },
+      {
+        "checkId": "properties.dropdown-variants",
+        "title": "Dropdown options that differ only by case, spacing or punctuation",
+        "severity": "high",
+        "category": "Properties",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 0,
+        "population": 5
+      },
+      {
+        "checkId": "properties.dropdown-plural-variants",
+        "title": "Dropdown options that are singular and plural of each other",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 0,
+        "population": 5
+      },
+      {
+        "checkId": "properties.near-zero-fill",
+        "title": "Custom properties filled on under 1% of records",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 0,
+        "population": 6
+      },
+      {
+        "checkId": "companies.no-contacts",
+        "title": "Companies with no associated contacts",
+        "severity": "low",
+        "category": "Companies",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 21,
+        "population": 139
+      },
+      {
+        "checkId": "companies.duplicate-domain",
+        "title": "Companies sharing the same domain",
+        "severity": "high",
+        "category": "Companies",
+        "objectType": "companies",
+        "status": "scored",
+        "affected": 10,
+        "population": 139
+      },
+      {
+        "checkId": "properties.no-description",
+        "title": "Custom properties with no description",
+        "severity": "low",
+        "category": "Properties",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 4,
+        "population": 7
+      },
+      {
+        "checkId": "properties.duplicate-labels",
+        "title": "Properties with the same label",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 0,
+        "population": 7
+      },
+      {
+        "checkId": "properties.near-duplicate-labels",
+        "title": "Properties with near-identical labels",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 0,
+        "population": 7
+      },
+      {
+        "checkId": "properties.dropdown-variants",
+        "title": "Dropdown options that differ only by case, spacing or punctuation",
+        "severity": "high",
+        "category": "Properties",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 0,
+        "population": 4
+      },
+      {
+        "checkId": "properties.dropdown-plural-variants",
+        "title": "Dropdown options that are singular and plural of each other",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 0,
+        "population": 4
+      },
+      {
+        "checkId": "properties.near-zero-fill",
+        "title": "Custom properties filled on under 1% of records",
+        "severity": "medium",
+        "category": "Properties",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 0,
+        "population": 2
+      },
+      {
+        "checkId": "deals.missing-amount",
+        "title": "Open or won deals with no amount",
+        "severity": "high",
+        "category": "Deals",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 6,
+        "population": 275
+      },
+      {
+        "checkId": "deals.missing-close-date",
+        "title": "Open deals with no close date",
+        "severity": "medium",
+        "category": "Deals",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 59,
+        "population": 158
+      },
+      {
+        "checkId": "deals.stale",
+        "title": "Open deals with no stage change in 30+ days",
+        "severity": "medium",
+        "category": "Deals",
+        "objectType": "deals",
+        "status": "scored",
+        "affected": 154,
+        "population": 158
+      }
+    ],
+    "score": {
+      "overall": 55.60080962958662,
+      "categories": [
+        {
+          "category": "Properties",
+          "score": 72.22222222222223,
+          "scored": 18,
+          "skipped": 0
+        },
+        {
+          "category": "Contacts",
+          "score": 71.66257166257168,
+          "scored": 5,
+          "skipped": 0
+        },
+        {
+          "category": "Companies",
+          "score": 38.489208633093526,
+          "scored": 2,
+          "skipped": 0
+        },
+        {
+          "category": "Deals",
+          "score": 33.5064935064935,
+          "scored": 3,
+          "skipped": 0
+        }
+      ],
+      "pointsRecovered": {
+        "properties.no-description:contacts": 0.556,
+        "properties.duplicate-labels:contacts": 1.111,
+        "properties.dropdown-variants:contacts": 1.667,
+        "properties.near-zero-fill:contacts": 1.111,
+        "contacts.missing-lifecycle-stage:contacts": 0.344,
+        "contacts.customer-without-won-deal:contacts": 6.364,
+        "contacts.missing-email:contacts": 1.261,
+        "contacts.duplicate-name-company:contacts": 1.72,
+        "contacts.malformed-email:contacts": 0.229,
+        "properties.no-description:companies": 0.556,
+        "companies.no-contacts:companies": 1.511,
+        "companies.duplicate-domain:companies": 10.791,
+        "properties.no-description:deals": 0.556,
+        "deals.missing-amount:deals": 2.338,
+        "deals.missing-close-date:deals": 7.143,
+        "deals.stale:deals": 7.143
+      },
+      "explanation": "Each check loses points in proportion to the share of records or properties it flags, reaching zero at 10% (high), 25% (medium) or 50% (low); categories average their checks weighted 3:2:1 by severity, and the total weights Contacts 35, Deals 25, Companies 20, Properties 20. Skipped checks don't count."
+    },
+    "apiCalls": 30,
+    "retries": 0,
+    "durationMs": 7968,
+    "simulated": false
+  }
+}

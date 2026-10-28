@@ -129,6 +129,12 @@ describe("work list CSV", () => {
     ]);
   });
 
+  it("leaves the link column blank when record links are off (the public sample)", () => {
+    const [header, first] = lines(workListCsv(r, "contacts", { recordLinks: false }));
+    assert.match(header, /HubSpot record link/);
+    assert.equal(first, "11,Contacts,Duplicates,high,1,,");
+  });
+
   it("uses each object's type ID in links", () => {
     assert.match(workListCsv(r, "deals"), /record\/0-3\/31/);
   });

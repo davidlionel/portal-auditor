@@ -15,9 +15,10 @@ type ScanState =
   | { status: "error"; message: string }
   | { status: "cancelled" };
 
-// `simulatorAvailable` is decided on the server; the simulator itself never
-// reaches the browser. The button only asks the server to run it.
-export function ConnectForm({ simulatorAvailable }: { simulatorAvailable: boolean }) {
+// Both flags are decided on the server. `liveScan` shows the key field;
+// `simulatorAvailable` shows the dev-only simulated scan, whose code never
+// reaches the browser: the button only asks the server to run it.
+export function ConnectForm({ liveScan, simulatorAvailable }: { liveScan: boolean; simulatorAvailable: boolean }) {
   const [state, setState] = useState<ScanState>({ status: "idle" });
   // Set when a scan starts; reading the clock during render breaks prerendering.
   const [now, setNow] = useState(0);
@@ -96,24 +97,28 @@ export function ConnectForm({ simulatorAvailable }: { simulatorAvailable: boolea
   return (
     <>
       <form onSubmit={onSubmit} className={`${styles.card} ${styles.form}`}>
-        <label htmlFor="token" className={styles.label}>
-          HubSpot service key
-        </label>
-        <div className={styles.row}>
-          <input
-            id="token"
-            name="token"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="Paste your service key"
-            className={styles.input}
-          />
-          <button type="submit" className={styles.button} disabled={running}>
-            {running ? "Scanning…" : "Run scan"}
-          </button>
-        </div>
-        <p className={styles.note}>Used for this scan only. Not stored, not logged.</p>
+        {liveScan && (
+          <>
+            <label htmlFor="token" className={styles.label}>
+              HubSpot service key
+            </label>
+            <div className={styles.row}>
+              <input
+                id="token"
+                name="token"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Paste your service key"
+                className={styles.input}
+              />
+              <button type="submit" className={styles.button} disabled={running}>
+                {running ? "Scanning…" : "Run scan"}
+              </button>
+            </div>
+            <p className={styles.note}>Used for this scan only. Not stored, not logged.</p>
+          </>
+        )}
         {simulatorAvailable && (
           <div className={styles.simulatorRow}>
             <button

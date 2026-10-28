@@ -21,8 +21,21 @@ const OBJECT_LABELS: Record<string, string> = {
   deals: "Deals",
 };
 
-function RecordId({ portal, objectType, id }: { portal: AccountDetails; objectType: ObjectType; id: string }) {
-  const url = recordUrl(portal, objectType, id);
+// Shown on the public sample report instead of record links.
+export type DemoInfo = { scannedAt: string };
+
+function RecordId({
+  portal,
+  objectType,
+  id,
+  linked,
+}: {
+  portal: AccountDetails;
+  objectType: ObjectType;
+  id: string;
+  linked: boolean;
+}) {
+  const url = linked ? recordUrl(portal, objectType, id) : null;
   if (!url) return <code>{id}</code>;
   return (
     <a className={styles.recordLink} href={url} target="_blank" rel="noreferrer">
@@ -47,13 +60,30 @@ function scoreClass(score: number) {
   return styles.scorePoor;
 }
 
-function ScoreCard({ report }: { report: ScanReport }) {
+const scanDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+function DemoBanner({ demo }: { demo: DemoInfo }) {
+  return (
+    <div className={styles.demoBanner} role="note">
+      <strong>Sample report</strong>
+      <p>
+        From a HubSpot developer test portal with synthetic data, scanned on {scanDate(demo.scannedAt)}.
+        Record links are off in the sample: they open the record inside HubSpot, which needs a login
+        to this test portal.
+      </p>
+    </div>
+  );
+}
+
+function ScoreCard({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
   const { score, checks } = report;
   const skipped = checks.filter((c) => c.status === "skipped");
   const scored = checks.filter((c) => c.status === "scored").length;
 
   return (
     <div className={styles.card}>
+      {demo && <DemoBanner demo={demo} />}
       {report.simulated && <SimulatedBanner />}
       {report.incomplete && (
         <div className={styles.incompleteBanner} role="alert">
@@ -141,7 +171,7 @@ function TopFixes({ report }: { report: ScanReport }) {
   );
 }
 
-function Samples({ finding, portal }: { finding: Finding; portal: AccountDetails }) {
+function Samples({ finding, portal, linked }: { finding: Finding; portal: AccountDetails; linked: boolean }) {
   const groups = finding.recordSamples;
   const shown = groups ? groups.length : finding.samples.length;
   return (
@@ -156,7 +186,7 @@ function Samples({ finding, portal }: { finding: Finding; portal: AccountDetails
                 {ids.map((id, i) => (
                   <span key={id}>
                     {i > 0 && " / "}
-                    <RecordId portal={portal} objectType={finding.objectType} id={id} />
+                    <RecordId portal={portal} objectType={finding.objectType} id={id} linked={linked} />
                   </span>
                 ))}
               </li>
@@ -171,15 +201,17 @@ function Samples({ finding, portal }: { finding: Finding; portal: AccountDetails
   );
 }
 
-export function Report({ report }: { report: ScanReport }) {
+// `demo` marks the public sample: a banner with the scan date, and no
+// record links.
+export function Report({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
   const { portal, findings } = report;
   const scanned = report.scannedObjects.map((o) => OBJECT_LABELS[o]).join(", ") || "none";
 
   return (
     <section className={styles.report} aria-live="polite">
-      <ScoreCard report={report} />
+      <ScoreCard report={report} demo={demo} />
       <TopFixes report={report} />
-      <ExportButtons report={report} />
+      <ExportButtons report={report} recordLinks={!demo} />
 
       <div className={styles.card}>
         <h2>Scan details</h2>
@@ -235,7 +267,7 @@ export function Report({ report }: { report: ScanReport }) {
                   <p className={styles.findingText}>
                     <strong>How to fix:</strong> {f.fix}
                   </p>
-                  <Samples finding={f} portal={portal} />
+                  <Samples finding={f} portal={portal} linked={!demo} />
                 </article>
               ))}
           </section>

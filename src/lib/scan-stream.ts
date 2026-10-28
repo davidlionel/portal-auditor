@@ -10,6 +10,8 @@ export type ScanStreamEvent =
   | { type: "error"; message: string };
 
 export type ScanStreamDeps = {
+  // Whether this deployment accepts real service keys at all.
+  liveScanEnabled: () => boolean;
   makeTransport: (token: string) => Transport;
   simulatorEnabled: () => boolean;
   // Loaded only after the guard passes.
@@ -51,6 +53,12 @@ export async function handleScanRequest(request: Request, deps: ScanStreamDeps):
     }
     transport = await deps.loadSimulator();
   } else {
+    // Refused before the key is even read, so a demo deployment never
+    // handles one.
+    if (!deps.liveScanEnabled()) {
+      console.info("[connect] live scan refused: live scanning is turned off");
+      return errorResponse(403, ERROR_MESSAGES.live_scan_off);
+    }
     const token = typeof body?.token === "string" ? body.token.trim() : "";
     // Local rejections log the reason so it's clear no HubSpot call was made.
     if (!token) {

@@ -87,6 +87,8 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  display: inline-block;
+  text-decoration: none;
 }
 
 .button:disabled {
@@ -381,4 +383,19 @@
 .simulatedBadge {
   background: var(--warn-bg);
   color: var(--warn);
+}
+
+.demoBanner {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ok-bg);
+  color: var(--foreground);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.demoBanner strong {
+  color: var(--ok);
 }

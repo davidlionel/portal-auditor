@@ -15,6 +15,7 @@ console.info = (...args: unknown[]) => void logs.push(args.join(" "));
 
 let stats: SimulatorStats = { requests: 0, rateLimited: 0 };
 const deps = {
+  liveScanEnabled: () => true,
   // The real-key path, answered by the simulator instead of HubSpot.
   makeTransport: () => {
     const sim = simulatorTransport({ size: SIZE_250K, latency: true, rateLimits: "realistic", seed: 7 });

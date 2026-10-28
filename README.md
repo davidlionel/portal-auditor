@@ -4,6 +4,8 @@ A web app that connects to a HubSpot portal with a read-only service key, scans 
 
 **Status:** early build. The app runs property and record checks on contacts, companies and deals, scores the portal out of 100, lists the top 5 fixes, and exports CSVs.
 
+The deployed site is **demo-only**: it shows a sample report from a HubSpot developer test portal and never accepts a service key. To scan your own portal, [run it on your machine](#run-it-on-your-own-portal).
+
 **Properties**
 - Custom properties with no description
 - Custom properties filled on under 1% of records
@@ -63,16 +65,34 @@ HubSpot can import the work list by Record ID to find or tag these records. Impo
 
 Remove the property or segment when the cleanup is done.
 
-## Run locally
+## Run it on your own portal
 
-Requires Node.js 20+.
+Scanning runs on your own machine, so your service key never leaves it except to call HubSpot. Requires Node.js 22.9 or later and Git.
 
-```bash
-npm install
-npm run dev
+1. **Get the code.**
+   ```bash
+   git clone https://github.com/davidlionel/portal-auditor.git
+   cd portal-auditor
+   npm install
+   ```
+2. **Create a service key** in HubSpot under **Development > Keys > Service keys**, ticking only the six read-only scopes in [Scopes to tick on the service key](#scopes-to-tick-on-the-service-key). Start with a developer test portal or sandbox rather than a portal with client data.
+3. **Turn on live scanning.** Create a file named `.env.local` in the project folder (it's gitignored, and works the same in PowerShell, cmd and bash) containing:
+   ```
+   ENABLE_LIVE_SCAN=true
+   ```
+4. **Start the app** with `npm run dev`, open http://localhost:3000, paste the key and click **Run scan**.
+
+The key is pasted into the page for each scan, not saved in `.env.local`. Live scanning is off unless that line is present, which is how the public demo stays demo-only. The home page reads the setting when the app is built, so after changing it on a deployment, redeploy; the scan endpoint checks it on every request regardless.
+
+### Refresh the sample report
+
+The sample report at `/demo` is a saved scan of a developer test portal (`src/demo/snapshot.json`). To replace it with a scan of your own test portal, add the portal's key to `.env.local`:
+
+```
+HUBSPOT_TOKEN=<service key>
 ```
 
-Open http://localhost:3000 and paste a service key from a HubSpot **developer test portal**. Don't use real client data.
+then run `npm run demo:snapshot`. The script scans the portal, refuses anything that isn't a developer test portal, and checks the result contains only record IDs, property names and labels, counts, check text and portal details (no names, emails, phone numbers or other record values) before saving it with the scan date. The sample page re-scores the snapshot with the current scoring settings, and shows record IDs without links, since links into HubSpot need a login to that portal. The site won't build without a snapshot.
 
 ### Simulated 250K portal (development only)
 
@@ -99,7 +119,10 @@ Two slower checks run separately. Both are plain Node scripts, so they work the 
 ```bash
 npm run test:scale            # full scan of the simulated 250K portal, about 2½ minutes
 npm run check:simulator-prod  # builds for production and proves the simulator is blocked
+npm run check:deploy -- <url> # checks a running site is demo-only (default http://localhost:3000)
 ```
+
+The deploy check confirms the home page has no key field, `/demo` renders the sample with a score, the scan-date banner and no HubSpot record links, `/api/scan` refuses a service key and the simulator with 403, and none of the simulator's code is in the browser scripts.
 
 The production check starts the built app with `ENABLE_SIMULATOR=true` and confirms the page has no simulator button, `/api/scan` refuses a simulated scan with 403, and no simulator code is in the browser bundles.
 
@@ -109,7 +132,9 @@ HubSpot recommends service keys for single-account API access, and legacy privat
 
 ## Key handling
 
-The service key is used for one scan and then dropped. Specifically:
+**The deployed demo never receives a service key.** Live scanning is off unless `ENABLE_LIVE_SCAN=true` is set, and the deployment doesn't set it: the page has no key field, and `/api/scan` refuses any key with a 403 before reading it.
+
+When live scanning is on (running locally), the service key is used for one scan and then dropped. Specifically:
 
 - **POST body only.** The browser sends the key in the JSON body of `POST /api/scan`, over HTTPS. It is never in a URL, query string or cookie, so it can't end up in access logs or browser history. (Server-sent events were ruled out because they can only use GET, which would put the key in a URL.)
 - **One request, no storage.** The server turns the key into a HubSpot client inside that single request and streams progress back on the same connection. There is no session, job ID, database or cache, and nothing keeps the key after the stream closes.

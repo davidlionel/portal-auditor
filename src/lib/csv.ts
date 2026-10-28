@@ -57,7 +57,11 @@ export function workListObjects(report: ScanReport): ObjectType[] {
 
 // Record IDs to clean up for one object: no names, emails or other values.
 // One object per file because HubSpot imports one object per file.
-export function workListCsv(report: ScanReport, objectType: ObjectType): string {
+export function workListCsv(
+  report: ScanReport,
+  objectType: ObjectType,
+  { recordLinks = true }: { recordLinks?: boolean } = {},
+): string {
   const rows = report.findings
     .filter((f) => f.objectType === objectType && f.records?.length)
     .flatMap((f) => {
@@ -71,7 +75,7 @@ export function workListCsv(report: ScanReport, objectType: ObjectType): string 
         f.title,
         f.severity,
         r.group ?? "",
-        recordUrl(report.portal, objectType, r.id) ?? "",
+        (recordLinks && recordUrl(report.portal, objectType, r.id)) || "",
         capped,
       ]);
     });

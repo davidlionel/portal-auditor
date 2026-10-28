@@ -14,6 +14,7 @@ console.info = (...args: unknown[]) => void logged.push(args.join(" "));
 function deps(overrides: Partial<ScanStreamDeps> = {}) {
   const made: string[] = [];
   const d: ScanStreamDeps = {
+    liveScanEnabled: () => true,
     // Stands in for HubSpot with the small simulated portal.
     makeTransport: (token) => {
       made.push(token);
@@ -74,6 +75,18 @@ describe("POST /api/scan", () => {
       assert.equal(events[0].type, "error");
       assert.deepEqual(made, []);
     }
+  });
+
+  it("refuses real keys when live scanning is off, without touching the key", async () => {
+    logged.length = 0;
+    const { d, made } = deps({ liveScanEnabled: () => false });
+    const response = await handleScanRequest(post({ token: KEY }), d);
+    assert.equal(response.status, 403);
+    const { raw, events } = await read(response);
+    assert.equal(events[0].type, "error");
+    assert.match(raw, /sample report only/);
+    assert.deepEqual(made, [], "no HubSpot client is created");
+    assert.ok(logged.every((l) => !l.includes("TESTKEYDONOTLOG")));
   });
 
   it("rejects a body that isn't JSON", async () => {

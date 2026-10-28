@@ -11,7 +11,12 @@ function retriesText(): string {
 }
 
 // What the user sees when a scan can't start or can't finish.
-export const ERROR_MESSAGES: Record<HubSpotErrorKind | "empty" | "malformed" | "bad_request", string> = {
+export const ERROR_MESSAGES: Record<
+  HubSpotErrorKind | "empty" | "malformed" | "bad_request" | "live_scan_off",
+  string
+> = {
+  live_scan_off:
+    "This site shows a sample report only and doesn't accept service keys. To scan your own portal, run the app locally (see the README).",
   empty: "Paste a HubSpot service key to connect.",
   malformed: "That doesn't look like a service key. Copy it again from Development > Keys > Service keys.",
   bad_request: "The scan request was malformed. Reload the page and try again.",
