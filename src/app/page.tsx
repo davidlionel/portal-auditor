@@ -9,9 +9,9 @@ const RUN_LOCALLY_URL = "https://github.com/davidlionel/portal-auditor#run-it-on
 const SCOPES_URL = "https://github.com/davidlionel/portal-auditor#scopes-to-tick-on-the-service-key";
 
 export default function Home() {
-  // Decided on the server. The public deployment leaves live scanning off,
-  // so it never receives a service key. This page is static, so it reads the
-  // setting at build time; /api/scan checks it again on every request.
+  // Decided on the server: on locally, off on Vercel, so the public demo never
+  // receives a service key. This page is static, so it reads the setting at
+  // build time; /api/scan checks it again on every request.
   const liveScan = liveScanEnabled();
   const simulator = simulatorEnabled();
   return (

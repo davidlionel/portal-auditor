@@ -71,22 +71,15 @@ Remove the property or segment when the cleanup is done.
 
 ## Run it on your own portal
 
-Scanning runs on your own machine, so your service key never leaves it except to call HubSpot. Requires Node.js 22.9 or later and Git.
+Scanning runs on your own machine, so your service key never leaves it except to call HubSpot. No configuration file is needed.
 
-1. **Get the code.**
-   ```bash
-   git clone https://github.com/davidlionel/portal-auditor.git
-   cd portal-auditor
-   npm install
-   ```
-2. **Create a service key** in HubSpot under **Development > Keys > Service keys**, ticking only the six read-only scopes in [Scopes to tick on the service key](#scopes-to-tick-on-the-service-key) below. Start with a developer test portal or sandbox rather than a portal with client data.
-3. **Turn on live scanning.** Create a file named `.env.local` in the project folder (it's gitignored, and works the same in PowerShell, cmd and bash) containing:
-   ```
-   ENABLE_LIVE_SCAN=true
-   ```
-4. **Start the app** with `npm run dev`, open http://localhost:3000, paste the key and click **Run scan**.
+1. Install [Node.js](https://nodejs.org) 22.9 or later.
+2. Get the code: `git clone https://github.com/davidlionel/portal-auditor.git`, or [download the ZIP](https://github.com/davidlionel/portal-auditor/archive/refs/heads/main.zip) and unzip it. Open a terminal in the project folder.
+3. Run `npm install`, then `npm run dev`.
+4. Open http://localhost:3000.
+5. Paste a service key and click **Run scan**. Create the key in HubSpot under **Development > Keys > Service keys**, ticking only the six read-only scopes below. Start with a developer test portal or sandbox rather than a portal with client data.
 
-The key is pasted into the page for each scan, not saved in `.env.local`. Live scanning is off unless that line is present, which is how the public demo stays demo-only. The home page reads the setting when the app is built, so after changing it on a deployment, redeploy; the scan endpoint checks it on every request regardless.
+The key is pasted into the page for each scan and never saved.
 
 ### Scopes to tick on the service key
 
@@ -98,15 +91,19 @@ The key is pasted into the page for each scan, not saved in `.env.local`. Live s
 
 Every scope is read-only. If one is missing, the scan skips that object or check and says so in the report.
 
+### Deploying your own copy
+
+Live scanning is on by default, except on Vercel: the app turns it off when Vercel's automatic `VERCEL` environment variable is present, which is how the public demo shows the sample only, refuses keys and needs no setting. To accept keys on your own Vercel deployment, add the environment variable `ENABLE_LIVE_SCAN=true` and redeploy (the home page reads the setting at build time; the scan endpoint checks it on every request). `ENABLE_LIVE_SCAN=false` turns scanning off anywhere. The `VERCEL` variable is only set when the project's **Enable access to System Environment Variables** setting is on, which is the default; `npm run check:deploy -- <url>` confirms a deployment refuses keys.
+
 ### Refresh the sample report
 
-The sample report at `/demo` is a saved scan of a developer test portal (`src/demo/snapshot.json`). To replace it with a scan of your own test portal, add the portal's key to `.env.local`:
+This is only for maintainers replacing the sample; scanning doesn't need it. The sample report at `/demo` is a saved scan of a developer test portal (`src/demo/snapshot.json`). To replace it with a scan of your own test portal, create a file named `.env.local` in the project folder (it's gitignored) containing that portal's key:
 
 ```
 HUBSPOT_TOKEN=<service key>
 ```
 
-then run `npm run demo:snapshot`. The script scans the portal, refuses anything that isn't a developer test portal, and checks the result contains only record IDs, property names and labels, counts, check text and portal details (no names, emails, phone numbers or other record values) before saving it with the scan date. The sample page re-scores the snapshot with the current scoring settings, and shows record IDs without links, since links into HubSpot need a login to that portal. The site won't build without a snapshot.
+then run `npm run demo:snapshot`. The script is the only thing that reads `HUBSPOT_TOKEN`. The script scans the portal, refuses anything that isn't a developer test portal, and checks the result contains only record IDs, property names and labels, counts, check text and portal details (no names, emails, phone numbers or other record values) before saving it with the scan date. The sample page re-scores the snapshot with the current scoring settings, and shows record IDs without links, since links into HubSpot need a login to that portal. The site won't build without a snapshot.
 
 ### Simulated 250K portal (development only)
 
@@ -146,7 +143,7 @@ HubSpot recommends service keys for single-account API access, and legacy privat
 
 ## Key handling
 
-**The deployed demo never receives a service key.** Live scanning is off unless `ENABLE_LIVE_SCAN=true` is set, and the deployment doesn't set it: the page has no key field, and `/api/scan` refuses any key with a 403 before reading it.
+**The deployed demo never receives a service key.** Live scanning is off on Vercel unless `ENABLE_LIVE_SCAN=true` is set, and the demo doesn't set it: the page has no key field, and `/api/scan` refuses any key with a 403 before reading it.
 
 When live scanning is on (running locally), the service key is used for one scan and then dropped. Specifically:
 
