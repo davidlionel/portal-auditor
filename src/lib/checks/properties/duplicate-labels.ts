@@ -1,7 +1,26 @@
 import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import { isCustom, type ObjectType, type PropertyDef } from "@/lib/hubspot/properties";
 import { differOnlyInDigits, levenshtein, normalizeLabel } from "@/lib/text";
-import type { Finding } from "../types";
+import type { CheckMeta, Finding } from "../types";
+
+export const DUPLICATE_LABELS: CheckMeta = {
+  checkId: "properties.duplicate-labels",
+  title: "Properties with the same label",
+  severity: "medium",
+};
+
+export const NEAR_DUPLICATE_LABELS: CheckMeta = {
+  checkId: "properties.near-duplicate-labels",
+  title: "Properties with near-identical labels",
+  severity: "medium",
+};
+
+// Labels are compared across all live properties, but only custom ones can
+// be fixed, so the rate is over custom properties.
+export const duplicateLabelsPopulation = (props: PropertyDef[]) =>
+  props.filter((p) => !p.archived && isCustom(p)).length;
+
+const customCount = (props: PropertyDef[]) => new Set(props.filter(isCustom).map((p) => p.name)).size;
 
 const describe = (p: PropertyDef) => `${p.name} ("${p.label}")`;
 
@@ -42,12 +61,12 @@ export function checkDuplicateLabels(
   const findings: Finding[] = [];
   if (exactGroups.length) {
     findings.push({
-      checkId: "properties.duplicate-labels",
-      title: "Properties with the same label",
+      ...DUPLICATE_LABELS,
       category: "Properties",
       objectType,
-      severity: "medium",
       count: exactGroups.length,
+      affected: customCount(exactGroups.flat()),
+      population: duplicateLabelsPopulation(props),
       samples: exactGroups
         .slice(0, config.sampleCap)
         .map((group) => group.map(describe).join(" / ")),
@@ -57,12 +76,12 @@ export function checkDuplicateLabels(
   }
   if (nearPairs.length) {
     findings.push({
-      checkId: "properties.near-duplicate-labels",
-      title: "Properties with near-identical labels",
+      ...NEAR_DUPLICATE_LABELS,
       category: "Properties",
       objectType,
-      severity: "medium",
       count: nearPairs.length,
+      affected: customCount(nearPairs.flat()),
+      population: duplicateLabelsPopulation(props),
       samples: nearPairs
         .slice(0, config.sampleCap)
         .map(([a, b]) => `${describe(a)} / ${describe(b)}`),

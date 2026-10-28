@@ -1,6 +1,16 @@
 import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import { isCustom, type ObjectType, type PropertyDef } from "@/lib/hubspot/properties";
-import type { Finding } from "../types";
+import type { CheckMeta, Finding } from "../types";
+
+export const nearZeroFill = (config: ChecksConfig = CHECKS_CONFIG): CheckMeta => ({
+  checkId: "properties.near-zero-fill",
+  title: `Custom properties filled on under ${(config.fillRate.nearZeroThreshold * 100).toString()}% of records`,
+  severity: "medium",
+});
+
+// Only candidates whose fill count was actually measured.
+export const fillRatePopulation = (candidates: PropertyDef[], filled: Map<string, number>) =>
+  candidates.filter((p) => filled.has(p.name)).length;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,15 +46,14 @@ export function checkFillRate(
     .sort((a, b) => a.rate - b.rate);
   if (!low.length) return [];
 
-  const pct = (config.fillRate.nearZeroThreshold * 100).toString();
   return [
     {
-      checkId: "properties.near-zero-fill",
-      title: `Custom properties filled on under ${pct}% of records`,
+      ...nearZeroFill(config),
       category: "Properties",
       objectType,
-      severity: "medium",
       count: low.length,
+      affected: low.length,
+      population: fillRatePopulation(candidates, filled),
       samples: low
         .slice(0, config.sampleCap)
         .map(({ p, rate }) => `${p.name} (${(rate * 100).toFixed(2)}%)`),

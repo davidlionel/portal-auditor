@@ -1,17 +1,51 @@
 import type { Client } from "@hubspot/api-client";
 import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
-import { checkDropdownVariants } from "./checks/properties/dropdown-variants";
-import { checkDuplicateLabels } from "./checks/properties/duplicate-labels";
-import { checkFillRate, fillRateCandidates } from "./checks/properties/fill-rate";
-import { checkNoDescription } from "./checks/properties/no-description";
-import { COUNT_CHECKS, countCheckTitle, countFinding } from "./checks/records/count-checks";
+import { SCORING_CONFIG, type ScoringConfig } from "@/config/scoring";
 import {
+  DROPDOWN_PLURAL_VARIANTS,
+  DROPDOWN_VARIANTS,
+  checkDropdownVariants,
+  dropdownPopulation,
+} from "./checks/properties/dropdown-variants";
+import {
+  DUPLICATE_LABELS,
+  NEAR_DUPLICATE_LABELS,
+  checkDuplicateLabels,
+  duplicateLabelsPopulation,
+} from "./checks/properties/duplicate-labels";
+import {
+  checkFillRate,
+  fillRateCandidates,
+  fillRatePopulation,
+  nearZeroFill,
+} from "./checks/properties/fill-rate";
+import {
+  NO_DESCRIPTION,
+  checkNoDescription,
+  noDescriptionPopulation,
+} from "./checks/properties/no-description";
+import {
+  COUNT_CHECKS,
+  countCheckMeta,
+  countFinding,
+  type CountCheck,
+} from "./checks/records/count-checks";
+import {
+  DUPLICATE_CONTACTS,
+  DUPLICATE_DOMAINS,
   DUPLICATE_TOOL_PATH,
   checkDuplicateContacts,
   checkDuplicateDomains,
 } from "./checks/records/duplicates";
-import { checkMalformedEmails } from "./checks/records/email-quality";
-import { SEVERITY_RANK, type Finding } from "./checks/types";
+import { MALFORMED_EMAIL, checkMalformedEmails } from "./checks/records/email-quality";
+import {
+  CATEGORY_FOR_OBJECT,
+  SEVERITY_RANK,
+  type Category,
+  type CheckMeta,
+  type CheckRun,
+  type Finding,
+} from "./checks/types";
 import {
   getAccountDetails,
   makeClient,
@@ -20,8 +54,15 @@ import {
   type HubSpotErrorKind,
 } from "./hubspot/client";
 import { listProperties, type ObjectType } from "./hubspot/properties";
-import { countRecords, fetchRecentWindow, searchRecords, type SearchRow } from "./hubspot/search";
+import {
+  countRecords,
+  countWhere,
+  fetchMatching,
+  fetchRecentWindow,
+  type SearchRow,
+} from "./hubspot/search";
 import { createPacer, type Pacer } from "./pace";
+import { scoreChecks, type HealthScore } from "./scoring";
 
 const OBJECT_TYPES: ObjectType[] = ["contacts", "companies", "deals"];
 
@@ -31,20 +72,38 @@ const OBJECT_LABELS: Record<ObjectType, string> = {
   deals: "Deals",
 };
 
-// Fields the row-level checks read from the recent-records window. Only
-// these are requested; values stay in memory for the scan and are never
+// Property checks that only need the property list.
+const PROPERTY_LIST_CHECKS = [
+  { meta: NO_DESCRIPTION, population: noDescriptionPopulation, run: checkNoDescription },
+  { meta: DUPLICATE_LABELS, population: duplicateLabelsPopulation, run: checkDuplicateLabels },
+  { meta: NEAR_DUPLICATE_LABELS, population: duplicateLabelsPopulation, run: checkDuplicateLabels },
+  { meta: DROPDOWN_VARIANTS, population: dropdownPopulation, run: checkDropdownVariants },
+  { meta: DROPDOWN_PLURAL_VARIANTS, population: dropdownPopulation, run: checkDropdownVariants },
+];
+
+// Checks that read field values from the recent-records window. Only these
+// fields are requested; values stay in memory for the scan and are never
 // returned to the browser.
-const WINDOW_PROPERTIES: Partial<Record<ObjectType, string[]>> = {
-  contacts: ["firstname", "lastname", "company", "email"],
-  companies: ["domain"],
+type WindowCheck = {
+  properties: string[];
+  metas: CheckMeta[];
+  run: (rows: SearchRow[], config: ChecksConfig) => Finding[];
 };
 
-const WINDOW_CHECKS: Partial<Record<ObjectType, (rows: SearchRow[], config: ChecksConfig) => Finding[]>> = {
-  contacts: (rows, config) => [
-    ...checkDuplicateContacts(rows, config),
-    ...checkMalformedEmails(rows, config),
-  ],
-  companies: (rows, config) => checkDuplicateDomains(rows, config),
+const WINDOW_CHECKS: Partial<Record<ObjectType, WindowCheck>> = {
+  contacts: {
+    properties: ["firstname", "lastname", "company", "email"],
+    metas: [DUPLICATE_CONTACTS, MALFORMED_EMAIL],
+    run: (rows, config) => [
+      ...checkDuplicateContacts(rows, config),
+      ...checkMalformedEmails(rows, config),
+    ],
+  },
+  companies: {
+    properties: ["domain"],
+    metas: [DUPLICATE_DOMAINS],
+    run: (rows, config) => checkDuplicateDomains(rows, config),
+  },
 };
 
 export type ScanReport = {
@@ -53,6 +112,9 @@ export type ScanReport = {
   // Plain-language notes on anything the scan couldn't cover.
   notes: string[];
   findings: Finding[];
+  // Every check attempted, scored or not.
+  checks: CheckRun[];
+  score: HealthScore;
   apiCalls: number;
   durationMs: number;
 };
@@ -69,9 +131,10 @@ type ScanContext = {
   now: number;
 };
 
-// Record checks either add findings and notes, or stop the whole scan
-// because the key itself was rejected.
-type PhaseResult = { findings: Finding[]; notes: string[] } | { abort: HubSpotErrorKind };
+// What a phase adds to the report, or a stop because the key was rejected.
+type PhaseResult =
+  | { findings: Finding[]; notes: string[]; runs: CheckRun[] }
+  | { abort: HubSpotErrorKind };
 
 function problemNote(kind: HubSpotErrorKind, scope: string): string {
   return kind === "missing_scope"
@@ -81,6 +144,56 @@ function problemNote(kind: HubSpotErrorKind, scope: string): string {
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
+// A check that ran. Checks with nothing to look at aren't scored.
+function ranCheck(
+  meta: CheckMeta,
+  category: Category,
+  objectType: ObjectType,
+  population: number,
+  findings: Finding[],
+): CheckRun {
+  const found = findings.find((f) => f.checkId === meta.checkId && f.objectType === objectType);
+  return {
+    ...meta,
+    category,
+    objectType,
+    status: population > 0 ? "scored" : "empty",
+    affected: found?.affected ?? 0,
+    population,
+  };
+}
+
+function skippedChecks(
+  metas: CheckMeta[],
+  category: Category,
+  objectType: ObjectType,
+  reason: string,
+): CheckRun[] {
+  return metas.map((meta) => ({
+    ...meta,
+    category,
+    objectType,
+    status: "skipped",
+    affected: 0,
+    population: 0,
+    reason,
+  }));
+}
+
+function recordCheckMetas(objectType: ObjectType, config: ChecksConfig): CheckMeta[] {
+  return [
+    ...COUNT_CHECKS.filter((c) => c.objectType === objectType).map((c) => countCheckMeta(c, config)),
+    ...(WINDOW_CHECKS[objectType]?.metas ?? []),
+  ];
+}
+
+function cappedNote(f: Finding): string[] {
+  const listed = f.records?.length ?? 0;
+  return f.records && listed < f.affected
+    ? [`"${f.title}": the work list has the first ${fmt(listed)} of ${fmt(f.affected)} records.`]
+    : [];
+}
+
 async function runRecordChecks(
   ctx: ScanContext,
   objectType: ObjectType,
@@ -89,58 +202,104 @@ async function runRecordChecks(
 ): Promise<PhaseResult> {
   const { client, counter, pace, config, now } = ctx;
   const label = OBJECT_LABELS[objectType];
+  const category = CATEGORY_FOR_OBJECT[objectType];
   const findings: Finding[] = [];
   const notes: string[] = [];
+  const runs: CheckRun[] = [];
+  const scope = `crm.objects.${objectType}.read`;
 
-  // Count checks: one Search call each, whatever the portal's size.
+  // Narrower populations (open deals, say) are shared between checks, so
+  // each one costs a single Search call.
+  const populations = new Map<string, number>();
+  async function populationOf(check: CountCheck) {
+    if (!check.populationFilterGroups) return { ok: true as const, data: totalRecords };
+    const groups = check.populationFilterGroups();
+    const key = JSON.stringify(groups);
+    const known = populations.get(key);
+    if (known !== undefined) return { ok: true as const, data: known };
+    const result = await countWhere(client, counter, pace, objectType, groups);
+    if (result.ok) populations.set(key, result.data);
+    return result;
+  }
+
+  // Count checks: the first page gives the total and samples; further pages,
+  // up to the work-list cap, give the export IDs.
   for (const check of COUNT_CHECKS.filter((c) => c.objectType === objectType)) {
+    const meta = countCheckMeta(check, config);
+    const skip = (reason: string) => {
+      notes.push(`"${meta.title}" skipped: ${reason}.`);
+      runs.push(...skippedChecks([meta], category, objectType, reason));
+    };
+
     const absent = check.requiredProps.filter((p) => !propertyNames.has(p));
     if (absent.length) {
-      notes.push(
-        `"${countCheckTitle(check, config)}" skipped: this portal has no ${absent.join(", ")} property.`,
-      );
+      skip(`this portal has no ${absent.join(", ")} property`);
       continue;
     }
-    const result = await searchRecords(client, counter, pace, objectType, {
-      filterGroups: check.filterGroups(now, config),
-      properties: ["hs_object_id"],
-      sorts: [{ propertyName: "createdate", direction: "DESCENDING" }],
-      limit: config.sampleCap,
-    });
-    if (!result.ok) {
-      if (result.kind === "invalid_token") return { abort: result.kind };
-      notes.push(`"${countCheckTitle(check, config)}" skipped: ${problemNote(result.kind, `crm.objects.${objectType}.read`)}.`);
-      continue;
-    }
-    findings.push(
-      ...countFinding(check, result.data.total, result.data.results.map((r) => r.id), config),
+    const matched = await fetchMatching(
+      client,
+      counter,
+      pace,
+      objectType,
+      {
+        filterGroups: check.filterGroups(now, config),
+        properties: ["hs_object_id"],
+        sorts: [{ propertyName: "createdate", direction: "DESCENDING" }],
+      },
+      Math.max(config.records.workListCap, config.sampleCap),
     );
+    if (!matched.ok) {
+      if (matched.kind === "invalid_token") return { abort: matched.kind };
+      skip(problemNote(matched.kind, scope));
+      continue;
+    }
+    const population = await populationOf(check);
+    if (!population.ok) {
+      if (population.kind === "invalid_token") return { abort: population.kind };
+      skip(problemNote(population.kind, scope));
+      continue;
+    }
+
+    const found = countFinding(
+      check,
+      { total: matched.data.total, population: population.data, ids: matched.data.rows.map((r) => r.id) },
+      config,
+    );
+    findings.push(...found);
+    notes.push(...found.flatMap(cappedNote));
+    runs.push(ranCheck(meta, category, objectType, population.data, found));
   }
 
   // Window checks: field values from the most recently created records.
-  const properties = WINDOW_PROPERTIES[objectType];
-  const runWindowChecks = WINDOW_CHECKS[objectType];
-  if (!properties || !runWindowChecks) return { findings, notes };
+  const windowCheck = WINDOW_CHECKS[objectType];
+  if (!windowCheck) return { findings, notes, runs };
+  const skipWindow = (reason: string) => {
+    notes.push(`${label} duplicate checks skipped: ${reason}.`);
+    runs.push(...skippedChecks(windowCheck.metas, category, objectType, reason));
+    return { findings, notes, runs };
+  };
 
-  const absent = properties.filter((p) => !propertyNames.has(p));
-  if (absent.length) {
-    notes.push(`${label} duplicate checks skipped: this portal has no ${absent.join(", ")} property.`);
-    return { findings, notes };
-  }
+  const absent = windowCheck.properties.filter((p) => !propertyNames.has(p));
+  if (absent.length) return skipWindow(`this portal has no ${absent.join(", ")} property`);
+
   const window = await fetchRecentWindow(
     client,
     counter,
     pace,
     objectType,
-    properties,
+    windowCheck.properties,
     config.records.recordWindow,
   );
   if (!window.ok) {
     if (window.kind === "invalid_token") return { abort: window.kind };
-    notes.push(`${label} duplicate checks skipped: ${problemNote(window.kind, `crm.objects.${objectType}.read`)}.`);
-    return { findings, notes };
+    return skipWindow(problemNote(window.kind, scope));
   }
-  findings.push(...runWindowChecks(window.data, config));
+  const found = windowCheck.run(window.data, config);
+  findings.push(...found);
+  notes.push(...found.flatMap(cappedNote));
+  runs.push(
+    ...windowCheck.metas.map((meta) => ranCheck(meta, category, objectType, window.data.length, found)),
+  );
 
   const covered = window.data.length;
   const coverage =
@@ -152,12 +311,13 @@ async function runRecordChecks(
     : "";
   notes.push(`${label} duplicate${objectType === "contacts" ? " and email" : ""} checks covered ${coverage}.${tool}`);
 
-  return { findings, notes };
+  return { findings, notes, runs };
 }
 
 export async function runScan(
   token: string,
   config: ChecksConfig = CHECKS_CONFIG,
+  scoring: ScoringConfig = SCORING_CONFIG,
 ): Promise<ScanResult> {
   const started = performance.now();
   const ctx: ScanContext = {
@@ -175,37 +335,58 @@ export async function runScan(
   const scannedObjects: ObjectType[] = [];
   const notes: string[] = [];
   const findings: Finding[] = [];
+  const runs: CheckRun[] = [];
 
   for (const objectType of OBJECT_TYPES) {
     const label = OBJECT_LABELS[objectType];
+    const category = CATEGORY_FOR_OBJECT[objectType];
+    // Fill rate and record checks need record access, which uses a different scope.
+    const skipRecordAccess = (reason: string) => {
+      notes.push(`${label} fill-rate and record checks skipped: ${reason}.`);
+      runs.push(
+        ...skippedChecks([nearZeroFill(config)], "Properties", objectType, reason),
+        ...skippedChecks(recordCheckMetas(objectType, config), category, objectType, reason),
+      );
+    };
 
     const props = await listProperties(client, counter, objectType);
     if (!props.ok) {
       if (props.kind === "invalid_token") return { ok: false, kind: props.kind };
-      notes.push(
-        `${label} skipped: ${problemNote(props.kind, `crm.schemas.${objectType}.read`)}.`,
+      const reason = problemNote(props.kind, `crm.schemas.${objectType}.read`);
+      notes.push(`${label} skipped: ${reason}.`);
+      runs.push(
+        ...skippedChecks(
+          [...PROPERTY_LIST_CHECKS.map((c) => c.meta), nearZeroFill(config)],
+          "Properties",
+          objectType,
+          reason,
+        ),
+        ...skippedChecks(recordCheckMetas(objectType, config), category, objectType, reason),
       );
       continue;
     }
     scannedObjects.push(objectType);
 
-    findings.push(
-      ...checkNoDescription(objectType, props.data, config),
-      ...checkDuplicateLabels(objectType, props.data, config),
-      ...checkDropdownVariants(objectType, props.data, config),
+    // Some functions report two checks (exact and near duplicates), so each
+    // function runs once and its findings are matched to both.
+    const listFindings = [...new Set(PROPERTY_LIST_CHECKS.map((c) => c.run))].flatMap((run) =>
+      run(objectType, props.data, config),
+    );
+    findings.push(...listFindings);
+    runs.push(
+      ...PROPERTY_LIST_CHECKS.map((c) =>
+        ranCheck(c.meta, "Properties", objectType, c.population(props.data), listFindings),
+      ),
     );
 
-    // Fill rate and record checks need record access, which uses a different scope.
     const total = await countRecords(client, counter, pace, objectType);
     if (!total.ok) {
       if (total.kind === "invalid_token") return { ok: false, kind: total.kind };
-      notes.push(
-        `${label} fill-rate and record checks skipped: ${problemNote(total.kind, `crm.objects.${objectType}.read`)}.`,
-      );
+      skipRecordAccess(problemNote(total.kind, `crm.objects.${objectType}.read`));
       continue;
     }
     if (total.data === 0) {
-      notes.push(`${label} fill-rate and record checks skipped: no records yet.`);
+      skipRecordAccess("no records yet");
       continue;
     }
 
@@ -221,7 +402,11 @@ export async function runScan(
     if (failed) {
       notes.push(`${label}: couldn't measure fill rate for ${failed} of ${candidates.length} properties.`);
     }
-    findings.push(...checkFillRate(objectType, candidates, filled, total.data, config));
+    const fillFindings = checkFillRate(objectType, candidates, filled, total.data, config);
+    findings.push(...fillFindings);
+    runs.push(
+      ranCheck(nearZeroFill(config), "Properties", objectType, fillRatePopulation(candidates, filled), fillFindings),
+    );
 
     const records = await runRecordChecks(
       ctx,
@@ -232,6 +417,7 @@ export async function runScan(
     if ("abort" in records) return { ok: false, kind: records.abort };
     findings.push(...records.findings);
     notes.push(...records.notes);
+    runs.push(...records.runs);
   }
 
   findings.sort(
@@ -245,6 +431,8 @@ export async function runScan(
       scannedObjects,
       notes,
       findings,
+      checks: runs,
+      score: scoreChecks(runs, scoring),
       apiCalls: counter.calls,
       durationMs: Math.round(performance.now() - started),
     },

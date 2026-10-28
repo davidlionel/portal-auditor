@@ -1,7 +1,24 @@
 import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import { isCustom, type ObjectType, type PropertyDef } from "@/lib/hubspot/properties";
 import { normalizeLabel } from "@/lib/text";
-import type { Finding } from "../types";
+import type { CheckMeta, Finding } from "../types";
+
+export const DROPDOWN_VARIANTS: CheckMeta = {
+  checkId: "properties.dropdown-variants",
+  title: "Dropdown options that differ only by case, spacing or punctuation",
+  severity: "high",
+};
+
+export const DROPDOWN_PLURAL_VARIANTS: CheckMeta = {
+  checkId: "properties.dropdown-plural-variants",
+  title: "Dropdown options that are singular and plural of each other",
+  severity: "medium",
+};
+
+const isCheckable = (p: PropertyDef) => isCustom(p) && !p.externalOptions && p.options.length >= 2;
+
+// Custom dropdowns with at least two options of their own.
+export const dropdownPopulation = (props: PropertyDef[]) => props.filter(isCheckable).length;
 
 // Ignores case, punctuation and all spacing, so "Trade Show" and "Tradeshow"
 // compare equal.
@@ -29,9 +46,12 @@ export function checkDropdownVariants(
 ): Finding[] {
   const definite: string[] = [];
   const possible: string[] = [];
+  // Properties with at least one problem, for the rate.
+  const definiteProps = new Set<string>();
+  const possibleProps = new Set<string>();
 
   for (const p of props) {
-    if (!isCustom(p) || p.externalOptions || p.options.length < 2) continue;
+    if (!isCheckable(p)) continue;
 
     // Definite: options identical once case, spacing and punctuation are ignored.
     const groups = new Map<string, string[]>();
@@ -41,7 +61,10 @@ export function checkDropdownVariants(
       groups.set(key, [...(groups.get(key) ?? []), o.label]);
     }
     for (const labels of groups.values()) {
-      if (labels.length > 1) definite.push(`${p.name}: ${labels.join(" / ")}`);
+      if (labels.length > 1) {
+        definite.push(`${p.name}: ${labels.join(" / ")}`);
+        definiteProps.add(p.name);
+      }
     }
 
     // Possible: singular/plural pairs of otherwise distinct options.
@@ -50,6 +73,7 @@ export function checkDropdownVariants(
       for (let j = i + 1; j < keys.length; j++) {
         if (isPluralPair(keys[i], keys[j])) {
           possible.push(`${p.name}: ${groups.get(keys[i])![0]} / ${groups.get(keys[j])![0]}`);
+          possibleProps.add(p.name);
         }
       }
     }
@@ -58,12 +82,12 @@ export function checkDropdownVariants(
   const findings: Finding[] = [];
   if (definite.length) {
     findings.push({
-      checkId: "properties.dropdown-variants",
-      title: "Dropdown options that differ only by case, spacing or punctuation",
+      ...DROPDOWN_VARIANTS,
       category: "Properties",
       objectType,
-      severity: "high",
       count: definite.length,
+      affected: definiteProps.size,
+      population: dropdownPopulation(props),
       samples: definite.slice(0, config.sampleCap),
       why: "Records split across variants like Webinar / webinar, so segments, workflows and reports miss some of them.",
       fix: "Keep one option, bulk-update records from the others to it, then delete the extra options.",
@@ -71,12 +95,12 @@ export function checkDropdownVariants(
   }
   if (possible.length) {
     findings.push({
-      checkId: "properties.dropdown-plural-variants",
-      title: "Dropdown options that are singular and plural of each other",
+      ...DROPDOWN_PLURAL_VARIANTS,
       category: "Properties",
       objectType,
-      severity: "medium",
       count: possible.length,
+      affected: possibleProps.size,
+      population: dropdownPopulation(props),
       samples: possible.slice(0, config.sampleCap),
       why: "Singular and plural options usually mean the same value, so records split between them.",
       fix: "Review each pair; if they mean the same thing, merge records into one option and delete the other.",

@@ -1,12 +1,12 @@
 import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import type { ObjectType } from "@/lib/hubspot/properties";
 import type { FilterGroup } from "@/lib/hubspot/search";
-import { CATEGORY_FOR_OBJECT, type Finding, type Severity } from "../types";
+import { CATEGORY_FOR_OBJECT, type CheckMeta, type Finding, type Severity } from "../types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// A record check answered by one Search call: `total` is the count and the
-// first results are the samples. No paging, at any portal size.
+// A record check answered by Search: `total` is the count, the first results
+// are the samples, and paging up to the work-list cap gives the export IDs.
 export type CountCheck = {
   checkId: string;
   objectType: ObjectType;
@@ -17,12 +17,17 @@ export type CountCheck = {
   // when the portal doesn't have one of them.
   requiredProps: string[];
   filterGroups: (now: number, config: ChecksConfig) => FilterGroup[];
+  // The records the rate is measured against, when that's narrower than all
+  // records of the object (Customers, open deals). One more Search total.
+  populationFilterGroups?: () => FilterGroup[];
   why: string;
   fix: string;
 };
 
 const missing = (propertyName: string) => ({ propertyName, operator: "NOT_HAS_PROPERTY" });
 const eq = (propertyName: string, value: string) => ({ propertyName, operator: "EQ", value });
+
+const openDeals = () => [{ filters: [eq("hs_is_closed", "false")] }];
 
 export const COUNT_CHECKS: CountCheck[] = [
   {
@@ -44,6 +49,7 @@ export const COUNT_CHECKS: CountCheck[] = [
     filterGroups: () => [
       { filters: [eq("lifecyclestage", "customer"), missing("recent_deal_close_date")] },
     ],
+    populationFilterGroups: () => [{ filters: [eq("lifecyclestage", "customer")] }],
     why: "Customer counts and revenue attribution disagree when contacts are Customers with no won deal behind them.",
     fix: "Check each contact: associate the won deal (a deal on the company alone doesn't count here), or move the contact back to the right stage.",
   },
@@ -80,6 +86,10 @@ export const COUNT_CHECKS: CountCheck[] = [
       { filters: [missing("amount"), eq("hs_is_closed", "false")] },
       { filters: [missing("amount"), eq("hs_is_closed_won", "true")] },
     ],
+    populationFilterGroups: () => [
+      { filters: [eq("hs_is_closed", "false")] },
+      { filters: [eq("hs_is_closed_won", "true")] },
+    ],
     why: "Deals without an amount count as zero in the forecast and revenue reports.",
     fix: "Make Amount required at the deal stages where it's known, then fill it in on these deals.",
   },
@@ -90,6 +100,7 @@ export const COUNT_CHECKS: CountCheck[] = [
     severity: "medium",
     requiredProps: ["closedate", "hs_is_closed"],
     filterGroups: () => [{ filters: [missing("closedate"), eq("hs_is_closed", "false")] }],
+    populationFilterGroups: openDeals,
     why: "Deals without a close date fall out of every forecast period.",
     fix: "Make Close date required when a deal is created, then set an expected date on these deals.",
   },
@@ -111,6 +122,7 @@ export const COUNT_CHECKS: CountCheck[] = [
         ],
       },
     ],
+    populationFilterGroups: openDeals,
     why: "Deals stuck in one stage make the pipeline look bigger than it is.",
     fix: "Review each deal with its owner: move it forward, close it as lost, or update the close date.",
   },
@@ -120,23 +132,30 @@ export function countCheckTitle(check: CountCheck, config: ChecksConfig = CHECKS
   return typeof check.title === "function" ? check.title(config) : check.title;
 }
 
+export function countCheckMeta(check: CountCheck, config: ChecksConfig = CHECKS_CONFIG): CheckMeta {
+  return { checkId: check.checkId, title: countCheckTitle(check, config), severity: check.severity };
+}
+
+// `total` matched the filter; `ids` are the first of them (up to the
+// work-list cap); `population` is what the rate is measured against.
 export function countFinding(
   check: CountCheck,
-  total: number,
-  sampleIds: string[],
+  result: { total: number; population: number; ids: string[] },
   config: ChecksConfig = CHECKS_CONFIG,
 ): Finding[] {
+  const { total, population, ids } = result;
   if (total === 0) return [];
   return [
     {
-      checkId: check.checkId,
-      title: countCheckTitle(check, config),
+      ...countCheckMeta(check, config),
       category: CATEGORY_FOR_OBJECT[check.objectType],
       objectType: check.objectType,
-      severity: check.severity,
       count: total,
+      affected: total,
+      population,
       samples: [],
-      recordSamples: sampleIds.slice(0, config.sampleCap).map((id) => [id]),
+      recordSamples: ids.slice(0, config.sampleCap).map((id) => [id]),
+      records: ids.slice(0, config.records.workListCap).map((id) => ({ id })),
       why: check.why,
       fix: check.fix,
     },

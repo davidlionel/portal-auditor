@@ -24,7 +24,21 @@ describe("count check filters", () => {
     for (const c of COUNT_CHECKS) {
       const used = new Set(c.filterGroups(NOW, CHECKS_CONFIG).flatMap((g) => g.filters.map((f) => f.propertyName)));
       assert.deepEqual([...used].sort(), [...c.requiredProps].sort(), c.checkId);
+      for (const f of (c.populationFilterGroups?.() ?? []).flatMap((g) => g.filters)) {
+        assert.ok(c.requiredProps.includes(f.propertyName), `${c.checkId} population uses ${f.propertyName}`);
+      }
     }
+  });
+
+  it("measure subset checks against the subset, not every record", () => {
+    assert.deepEqual(check("contacts.customer-without-won-deal").populationFilterGroups?.(), [
+      { filters: [{ propertyName: "lifecyclestage", operator: "EQ", value: "customer" }] },
+    ]);
+    const open = [{ filters: [{ propertyName: "hs_is_closed", operator: "EQ", value: "false" }] }];
+    assert.deepEqual(check("deals.missing-close-date").populationFilterGroups?.(), open);
+    assert.deepEqual(check("deals.stale").populationFilterGroups?.(), open);
+    assert.equal(check("deals.missing-amount").populationFilterGroups?.().length, 2);
+    assert.equal(check("contacts.missing-email").populationFilterGroups, undefined);
   });
 
   it("missing lifecycle stage is a single NOT_HAS_PROPERTY filter", () => {
@@ -96,18 +110,28 @@ describe("countFinding", () => {
   const lifecycle = check("contacts.missing-lifecycle-stage");
 
   it("returns nothing when no records match", () => {
-    assert.deepEqual(countFinding(lifecycle, 0, []), []);
+    assert.deepEqual(countFinding(lifecycle, { total: 0, population: 100, ids: [] }), []);
   });
 
   it("uses the Search total as the count and the results as samples", () => {
-    const [finding] = countFinding(lifecycle, 2500, ["101", "102"]);
+    const [finding] = countFinding(lifecycle, { total: 2500, population: 250_000, ids: ["101", "102"] });
     assert.equal(finding.count, 2500);
+    assert.equal(finding.affected, 2500);
+    assert.equal(finding.population, 250_000);
     assert.equal(finding.category, "Contacts");
     assert.deepEqual(finding.recordSamples, [["101"], ["102"]]);
   });
 
-  it("caps samples at the configured limit", () => {
+  it("caps samples at the sample limit and the work list at the work-list limit", () => {
     const ids = Array.from({ length: 15 }, (_, i) => String(i));
-    assert.equal(countFinding(lifecycle, 15, ids)[0].recordSamples?.length, CHECKS_CONFIG.sampleCap);
+    const config = { ...CHECKS_CONFIG, records: { ...CHECKS_CONFIG.records, workListCap: 12 } };
+    const [finding] = countFinding(lifecycle, { total: 4512, population: 9000, ids }, config);
+    assert.equal(finding.recordSamples?.length, CHECKS_CONFIG.sampleCap);
+    assert.equal(finding.records?.length, 12);
+    assert.deepEqual(finding.records?.[0], { id: "0" });
+  });
+
+  it("defaults the work list to 1,000 records per check", () => {
+    assert.equal(CHECKS_CONFIG.records.workListCap, 1000);
   });
 });

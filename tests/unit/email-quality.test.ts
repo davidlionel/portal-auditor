@@ -17,6 +17,9 @@ describe("malformed email", () => {
     assert.equal(finding.checkId, "contacts.malformed-email");
     assert.equal(finding.count, 4);
     assert.deepEqual(finding.recordSamples, [["1"], ["2"], ["3"], ["4"]]);
+    assert.equal(finding.affected, 4);
+    assert.equal(finding.population, 5);
+    assert.deepEqual(finding.records?.map((r) => r.id), ["1", "2", "3", "4"]);
   });
 
   it("does not flag valid unusual addresses", () => {

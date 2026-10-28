@@ -84,6 +84,33 @@ describe("duplicate contacts", () => {
     assert.equal(finding.recordSamples?.[0].length, 5, "IDs per group are capped at 5");
   });
 
+  it("counts records in groups for the rate, measured against the window", () => {
+    const [finding] = checkDuplicateContacts([
+      ...Array.from({ length: 6 }, (_, i) => contact(`g${i}`, "A", "Grind", "Acme Grinding")),
+      contact("p1", "B", "Pair", "X"),
+      contact("p2", "B", "Pair", "X"),
+      contact("solo", "C", "Solo", "Y"),
+    ]);
+    assert.equal(finding.count, 2, "the report counts groups");
+    assert.equal(finding.affected, 8, "the score counts records");
+    assert.equal(finding.population, 9);
+  });
+
+  it("numbers groups in the work list and keeps whole groups under the cap", () => {
+    const rows = [
+      ...Array.from({ length: 3 }, (_, i) => contact(`t${i}`, "T", "Three", "X")),
+      contact("p1", "P", "Pair", "X"),
+      contact("p2", "P", "Pair", "X"),
+    ];
+    const config = { ...CHECKS_CONFIG, records: { ...CHECKS_CONFIG.records, workListCap: 4 } };
+    const [finding] = checkDuplicateContacts(rows, config);
+    assert.deepEqual(finding.records, [
+      { id: "t0", group: 1 },
+      { id: "t1", group: 1 },
+      { id: "t2", group: 1 },
+    ]);
+  });
+
   it("points the fix to HubSpot's duplicate tool", () => {
     const [finding] = checkDuplicateContacts([contact("1", "A", "B", "C"), contact("2", "A", "B", "C")]);
     assert.match(finding.fix, /Manage duplicates/);

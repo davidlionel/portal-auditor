@@ -11,6 +11,7 @@ export type ChecksConfig = {
   };
   records: {
     recordWindow: number;
+    workListCap: number;
     staleDealDays: number;
     typoDomains: string[];
   };
@@ -38,6 +39,9 @@ export const CHECKS_CONFIG: ChecksConfig = {
     // the most recently created records per object. 10,000 is the Search
     // API's ceiling for one query.
     recordWindow: 10_000,
+    // Record IDs per check in the work-list export. Count checks page
+    // through matching records up to this many (200 per call).
+    workListCap: 1_000,
     // An open deal with no stage change for this long is stale.
     staleDealDays: 30,
     // Valid-looking email domains that are almost always typos.
