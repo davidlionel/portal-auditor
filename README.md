@@ -74,13 +74,34 @@ npm run dev
 
 Open http://localhost:3000 and paste a service key from a HubSpot **developer test portal**. Don't use real client data.
 
+### Simulated 250K portal (development only)
+
+To watch a full-size scan without a big portal, turn on the built-in simulator. Create a file named `.env.local` in the project folder (it's gitignored) containing:
+
+```
+ENABLE_SIMULATOR=true
+```
+
+Then run `npm run dev`. A **Run simulated 250K scan** button appears under the key field. It scans a fake portal (250,000 contacts, 30,000 companies, 15,000 deals, 300 custom properties) with HubSpot-like response times and occasional rate limits, so it takes about two and a half minutes. The progress bar and the report show a **SIMULATED PORTAL** banner, and no HubSpot calls are made. Delete the line or the file to turn it off.
+
+The simulator only runs when **both** are true: the app is a development build (`npm run dev`) and `ENABLE_SIMULATOR=true`. A production build (`npm run build` then `npm start`, or a deployment) ignores the flag, even though Next.js reads `.env.local` there too. The simulator code runs only on the server and never reaches the browser.
+
 ## Tests
 
 ```bash
 npm test
 ```
 
-Unit tests run each check, the scoring and the CSV exports against hand-built fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses.
+Unit tests run each check, the scoring, the CSV exports, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses.
+
+Two slower checks run separately. Both are plain Node scripts, so they work the same in PowerShell, cmd and bash:
+
+```bash
+npm run test:scale            # full scan of the simulated 250K portal, about 2½ minutes
+npm run check:simulator-prod  # builds for production and proves the simulator is blocked
+```
+
+The production check starts the built app with `ENABLE_SIMULATOR=true` and confirms the page has no simulator button, `/api/scan` refuses a simulated scan with 403, and no simulator code is in the browser bundles.
 
 ## Why a service key
 
@@ -88,7 +109,31 @@ HubSpot recommends service keys for single-account API access, and legacy privat
 
 ## Key handling
 
-The service key is sent to the server for a single request, used to call HubSpot, and discarded. It is not stored in a cookie, database or log, and it is never returned to the browser.
+The service key is used for one scan and then dropped. Specifically:
+
+- **POST body only.** The browser sends the key in the JSON body of `POST /api/scan`, over HTTPS. It is never in a URL, query string or cookie, so it can't end up in access logs or browser history. (Server-sent events were ruled out because they can only use GET, which would put the key in a URL.)
+- **One request, no storage.** The server turns the key into a HubSpot client inside that single request and streams progress back on the same connection. There is no session, job ID, database or cache, and nothing keeps the key after the stream closes.
+- **Not logged.** Server logs record each HubSpot call's method, path, status and timing, never the key or the request body. Errors from the HubSpot SDK are dropped rather than logged, because they can include request details.
+- **Never returned.** Progress lines and the report contain no key; a unit test checks the whole response stream and the logs for it.
+- **Cleared from the page.** The key field is emptied as soon as the scan starts.
+- **Cancel stops the scan.** Pressing Cancel or closing the tab aborts the request, and the server stops before its next HubSpot call.
+
+## Progress
+
+The scan streams its progress while it runs: one JSON line per update (NDJSON), then the report as the last line. The bar shows the current step (for example "Measuring contact fill rates · 120 of 200"), a percentage, the API calls so far including retries, and the elapsed time.
+
+The percentage is HubSpot calls done ÷ calls planned. A short setup step reads the account, property lists and record totals first, so the scan knows nearly every call it will make before the checks start. When a check finds more matching records than one page holds, its extra pages are added to the plan. The percentage never goes backwards and only reaches 100 when the report is ready.
+
+## Rate limits
+
+HubSpot returns 429 when a limit is hit, with the limit's name in the response (`policyName`). The scan:
+
+- **Retries 10-second-window limits** up to 5 times, waiting 1, 2, 4, 8, then 10 seconds, plus up to 25% at random. If HubSpot sends a `Retry-After` header (its docs don't promise one), the scan waits exactly that long, unless it's over 30 seconds, in which case it stops instead of hanging.
+- **Doesn't retry the daily limit.** Waiting seconds can't fix it. HubSpot resets it at midnight in the portal's time zone.
+- **Keeps the whole queue waiting.** Searches run one at a time, so a retry pauses every search behind it rather than letting them pile up.
+- **Stops cleanly when retries run out.** The scan makes no more calls and returns what it has: the report is marked **Incomplete: HubSpot rate limit** at the top, the checks that didn't run are listed as not scored, and the score covers only the checks that finished.
+
+Every attempt counts toward the report's API call total, and retries are shown separately. Retry settings live in `src/config/requests.ts`.
 
 ## Scopes to tick on the service key
 
@@ -112,16 +157,19 @@ Duplicate and email checks need field values, so they read a **window of the mos
 
 Search calls run one at a time, at least 250ms apart, to stay under HubSpot's limit of 5 search requests per second per account. Each report shows the number of API calls and the scan time.
 
-**Estimated calls for a 250K-contact portal** (30K companies, 15K deals, 300 custom properties):
+**Tested against a simulated 250K-contact portal; not yet run on a real portal of that size.** The simulated portal has 250,000 contacts, 30,000 companies, 15,000 deals and 300 custom properties, HubSpot-like response times (120–350 ms per search) and injected 429s. One full scan through the real scan endpoint (`npm run test:scale`) measured:
 
 | Part | Calls |
 |---|---|
 | Account details and property lists | 4 |
-| Record totals and fill rates | about 303 |
-| Record count checks, including work-list paging (7 checks × up to 5 calls) | up to 35 |
+| Record totals and fill rates (3 totals, 300 custom properties) | 303 |
+| Record count checks, including work-list paging (7 checks) | 31 |
 | Score populations (Customers, open deals, open or won deals) | 3 |
 | Contact and company windows (10,000 ÷ 200 each) | 100 |
-| **Total** | **about 445**, roughly 1 minute 50 seconds of paced search |
+| Retries after injected 429s | 13 |
+| **Total** | **454 calls in 2 min 23 s** |
+
+Before measuring, the estimate was about 445 calls and 1 minute 50 seconds. The count checks needed 31 calls rather than the 35 allowed, because some had fewer than 1,000 matches. The scan took longer than estimated because many simulated responses take longer than the 250 ms gap between searches, and the 13 retries added roughly 20–25 seconds of waiting. A real portal's timing depends on HubSpot's actual response times and on other apps sharing the portal's limits.
 
 The window keeps duplicate checks at a fixed cost, so a portal with 1 million contacts still uses 50 calls for them.
 

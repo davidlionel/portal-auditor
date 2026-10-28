@@ -1,5 +1,5 @@
-import type { Client } from "@hubspot/api-client";
-import { request, type CallCounter, type HubSpotResult } from "./client";
+
+import { request, type CallTracker, type HubSpotResult, type Transport } from "./client";
 
 export type ObjectType = "contacts" | "companies" | "deals";
 
@@ -40,13 +40,13 @@ type RawProperty = {
 
 // Returns non-archived, non-sensitive properties (the API's defaults).
 export async function listProperties(
-  client: Client,
-  counter: CallCounter,
+  transport: Transport,
+  tracker: CallTracker,
   objectType: ObjectType,
 ): Promise<HubSpotResult<PropertyDef[]>> {
   const result = await request<{ results?: RawProperty[] }>(
-    client,
-    counter,
+    transport,
+    tracker,
     "GET",
     `/crm/properties/2026-09/${objectType}`,
   );

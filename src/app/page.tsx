@@ -1,3 +1,4 @@
+import { simulatorEnabled } from "@/lib/simulator/guard";
 import { ConnectForm } from "./connect-form";
 import styles from "./page.module.css";
 
@@ -50,7 +51,7 @@ export default function Home() {
         </table>
       </section>
 
-      <ConnectForm />
+      <ConnectForm simulatorAvailable={simulatorEnabled()} />
     </main>
   );
 }

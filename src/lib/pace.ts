@@ -1,6 +1,7 @@
 // Simple limiter for HubSpot search calls: one at a time, at least
 // minIntervalMs apart. HubSpot allows 5 search requests/second per account;
-// 250ms keeps us at 4/second. The full queue with 429 backoff comes later.
+// 250ms keeps us at 4/second. Retries after a 429 happen inside a task
+// (see hubspot/client.ts), so the whole queue waits them out.
 export function createPacer(minIntervalMs: number) {
   let lastStart = 0;
   let chain: Promise<unknown> = Promise.resolve();

@@ -332,3 +332,53 @@
   font-size: 0.8125rem;
   font-weight: 700;
 }
+
+.progressBar {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--accent);
+}
+
+.progressPhase {
+  margin-top: 10px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.simulatorRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.simulatedBanner {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 2px dashed var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.simulatedBanner strong {
+  margin-right: 8px;
+  letter-spacing: 0.06em;
+}
+
+.incompleteBanner {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: var(--error);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.simulatedBadge {
+  background: var(--warn-bg);
+  color: var(--warn);
+}

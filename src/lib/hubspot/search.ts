@@ -1,6 +1,6 @@
-import type { Client } from "@hubspot/api-client";
+
 import type { Pacer } from "../pace";
-import { request, type CallCounter, type HubSpotResult } from "./client";
+import { request, type CallTracker, type HubSpotResult, type Transport } from "./client";
 import type { ObjectType } from "./properties";
 
 // HubSpot's documented Search limits: 200 results per page, and no paging
@@ -31,10 +31,10 @@ type RawSearchResponse = {
 };
 
 // One paced Search call. Every search in the scan goes through here, so the
-// pacer and call counter see all of them.
+// pacer and call tracker see all of them.
 export async function searchRecords(
-  client: Client,
-  counter: CallCounter,
+  transport: Transport,
+  tracker: CallTracker,
   pace: Pacer,
   objectType: ObjectType,
   search: SearchRequest,
@@ -42,8 +42,8 @@ export async function searchRecords(
   const body = { filterGroups: [], ...search };
   const result = await pace(() =>
     request<RawSearchResponse>(
-      client,
-      counter,
+      transport,
+      tracker,
       "POST",
       `/crm/objects/2026-09/${objectType}/search`,
       body,
@@ -65,13 +65,13 @@ export async function searchRecords(
 // Counts records matching the filter groups via the Search API's `total`,
 // without pulling the records.
 export async function countWhere(
-  client: Client,
-  counter: CallCounter,
+  transport: Transport,
+  tracker: CallTracker,
   pace: Pacer,
   objectType: ObjectType,
   filterGroups: FilterGroup[],
 ): Promise<HubSpotResult<number>> {
-  const result = await searchRecords(client, counter, pace, objectType, {
+  const result = await searchRecords(transport, tracker, pace, objectType, {
     limit: 1,
     properties: ["hs_object_id"],
     filterGroups,
@@ -82,31 +82,43 @@ export async function countWhere(
 
 // With no propertyName it counts every record of the object.
 export function countRecords(
-  client: Client,
-  counter: CallCounter,
+  transport: Transport,
+  tracker: CallTracker,
   pace: Pacer,
   objectType: ObjectType,
   propertyName?: string,
 ): Promise<HubSpotResult<number>> {
   return countWhere(
-    client,
-    counter,
+    transport,
+    tracker,
     pace,
     objectType,
     propertyName ? [{ filters: [{ propertyName, operator: "HAS_PROPERTY" }] }] : [],
   );
 }
 
+// Search calls needed to read this many results.
+export const pagesFor = (results: number) => Math.max(1, Math.ceil(results / MAX_PAGE_SIZE));
+
+export type PagingHooks = {
+  // Once the first page says how many matched, so progress can plan the
+  // remaining pages before they're fetched.
+  onTotal?: (total: number, pages: number) => void;
+  // After each page, with the rows fetched so far.
+  onPage?: (fetched: number) => void;
+};
+
 // Pages through a search, 200 per call, until `cap` rows (never more than one
 // query's 10,000 ceiling) or the results run out. Returns the search's total
 // too, so a capped list still knows how many matched.
 export async function fetchMatching(
-  client: Client,
-  counter: CallCounter,
+  transport: Transport,
+  tracker: CallTracker,
   pace: Pacer,
   objectType: ObjectType,
   search: Omit<SearchRequest, "limit" | "after">,
   cap: number,
+  hooks: PagingHooks = {},
 ): Promise<HubSpotResult<{ total: number; rows: SearchRow[] }>> {
   const limit = Math.max(1, Math.min(cap, MAX_RESULTS_PER_QUERY));
   const rows: SearchRow[] = [];
@@ -114,14 +126,16 @@ export async function fetchMatching(
   let after: string | undefined;
 
   do {
-    const page = await searchRecords(client, counter, pace, objectType, {
+    const page = await searchRecords(transport, tracker, pace, objectType, {
       ...search,
       limit: Math.min(MAX_PAGE_SIZE, limit - rows.length),
       after,
     });
     if (!page.ok) return page;
+    if (!rows.length) hooks.onTotal?.(page.data.total, pagesFor(Math.min(page.data.total, limit)));
     total = page.data.total;
     rows.push(...page.data.results);
+    hooks.onPage?.(rows.length);
     after = page.data.nextAfter;
     if (!page.data.results.length) break;
   } while (after && rows.length < limit);
@@ -132,20 +146,22 @@ export async function fetchMatching(
 // The most recently created records, newest first, up to `cap`. Used by
 // checks that need field values.
 export async function fetchRecentWindow(
-  client: Client,
-  counter: CallCounter,
+  transport: Transport,
+  tracker: CallTracker,
   pace: Pacer,
   objectType: ObjectType,
   properties: string[],
   cap: number,
+  hooks: PagingHooks = {},
 ): Promise<HubSpotResult<SearchRow[]>> {
   const result = await fetchMatching(
-    client,
-    counter,
+    transport,
+    tracker,
     pace,
     objectType,
     { properties, sorts: [{ propertyName: "createdate", direction: "DESCENDING" }] },
     cap,
+    hooks,
   );
   return result.ok ? { ok: true, data: result.data.rows } : result;
 }

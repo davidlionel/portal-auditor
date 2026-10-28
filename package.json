@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test \"tests/unit/*.test.ts\""
+    "test": "tsx --test \"tests/unit/*.test.ts\"",
+    "test:scale": "tsx tests/scale/simulated-250k.ts",
+    "check:simulator-prod": "next build && tsx tests/prod/simulator-blocked.ts"
   },
   "dependencies": {
     "@hubspot/api-client": "^14.0.1",

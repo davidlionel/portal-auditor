@@ -5,6 +5,7 @@ import type { ObjectType } from "@/lib/hubspot/properties";
 import type { ScanReport } from "@/lib/scan";
 import { checkRate, topFixes } from "@/lib/scoring";
 import { ExportButtons } from "./export-buttons";
+import { SimulatedBanner } from "./progress-card";
 import styles from "./page.module.css";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -53,11 +54,23 @@ function ScoreCard({ report }: { report: ScanReport }) {
 
   return (
     <div className={styles.card}>
+      {report.simulated && <SimulatedBanner />}
+      {report.incomplete && (
+        <div className={styles.incompleteBanner} role="alert">
+          <strong>Incomplete: HubSpot rate limit</strong>
+          <p>{report.incomplete.message}</p>
+          <p>The score covers only the checks that finished; the rest are listed below as not scored.</p>
+        </div>
+      )}
       <div className={styles.resultHeader}>
         <h2>Health report for portal {report.portal.portalId}</h2>
-        <span className={styles.badge}>
-          {ACCOUNT_TYPE_LABELS[report.portal.accountType] ?? report.portal.accountType}
-        </span>
+        {report.simulated ? (
+          <span className={`${styles.badge} ${styles.simulatedBadge}`}>Simulated</span>
+        ) : (
+          <span className={styles.badge}>
+            {ACCOUNT_TYPE_LABELS[report.portal.accountType] ?? report.portal.accountType}
+          </span>
+        )}
       </div>
       <div className={styles.scoreHeader}>
         {score.overall === null ? (
@@ -176,7 +189,10 @@ export function Report({ report }: { report: ScanReport }) {
           <dt>Findings</dt>
           <dd>{findings.length}</dd>
           <dt>API calls</dt>
-          <dd>{report.apiCalls}</dd>
+          <dd>
+            {report.apiCalls}
+            {report.retries ? ` (${report.retries} ${report.retries === 1 ? "retry" : "retries"} after HubSpot rate limits)` : ""}
+          </dd>
           <dt>Scan time</dt>
           <dd>{(report.durationMs / 1000).toFixed(1)}s</dd>
           <dt>Data center</dt>

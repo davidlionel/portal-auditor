@@ -38,7 +38,9 @@ function report(findings: Finding[]): ScanReport {
     checks,
     score: scoreChecks(checks),
     apiCalls: 0,
+    retries: 0,
     durationMs: 0,
+    simulated: false,
   };
 }
 

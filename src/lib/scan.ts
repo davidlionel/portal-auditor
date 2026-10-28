@@ -1,5 +1,5 @@
-import type { Client } from "@hubspot/api-client";
 import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
+import type { RetryConfig } from "@/config/requests";
 import { SCORING_CONFIG, type ScoringConfig } from "@/config/scoring";
 import {
   DROPDOWN_PLURAL_VARIANTS,
@@ -48,20 +48,24 @@ import {
 } from "./checks/types";
 import {
   getAccountDetails,
-  makeClient,
+  newTracker,
   type AccountDetails,
-  type CallCounter,
+  type CallTracker,
   type HubSpotErrorKind,
+  type Transport,
 } from "./hubspot/client";
-import { listProperties, type ObjectType } from "./hubspot/properties";
+import { listProperties, type ObjectType, type PropertyDef } from "./hubspot/properties";
 import {
   countRecords,
   countWhere,
   fetchMatching,
   fetchRecentWindow,
+  pagesFor,
   type SearchRow,
 } from "./hubspot/search";
+import { limitMessage } from "./messages";
 import { createPacer, type Pacer } from "./pace";
+import { createProgress, type Progress, type ProgressEvent } from "./progress";
 import { scoreChecks, type HealthScore } from "./scoring";
 
 const OBJECT_TYPES: ObjectType[] = ["contacts", "companies", "deals"];
@@ -70,6 +74,13 @@ const OBJECT_LABELS: Record<ObjectType, string> = {
   contacts: "Contacts",
   companies: "Companies",
   deals: "Deals",
+};
+
+// Singular, lowercase, for progress text: "contact properties".
+const OBJECT_NOUNS: Record<ObjectType, string> = {
+  contacts: "contact",
+  companies: "company",
+  deals: "deal",
 };
 
 // Property checks that only need the property list.
@@ -106,6 +117,8 @@ const WINDOW_CHECKS: Partial<Record<ObjectType, WindowCheck>> = {
   },
 };
 
+export type LimitKind = "rate_limited" | "daily_limit";
+
 export type ScanReport = {
   portal: AccountDetails;
   scannedObjects: ObjectType[];
@@ -116,25 +129,55 @@ export type ScanReport = {
   checks: CheckRun[];
   score: HealthScore;
   apiCalls: number;
+  retries: number;
   durationMs: number;
+  // True when the report came from the dev-only simulated portal.
+  simulated: boolean;
+  // Set when HubSpot's rate limit stopped the scan early. The checks that
+  // didn't run are listed as not scored.
+  incomplete?: { kind: LimitKind; message: string };
 };
 
 export type ScanResult =
   | { ok: true; report: ScanReport }
   | { ok: false; kind: HubSpotErrorKind };
 
+export type ScanOptions = {
+  config?: ChecksConfig;
+  scoring?: ScoringConfig;
+  onProgress?: (event: ProgressEvent) => void;
+  // Aborted when the browser cancels or disconnects.
+  signal?: AbortSignal;
+  simulated?: boolean;
+  // Retry settings and timer; tests shorten them.
+  retry?: RetryConfig;
+  sleep?: CallTracker["sleep"];
+};
+
 type ScanContext = {
-  client: Client;
-  counter: CallCounter;
+  transport: Transport;
+  tracker: CallTracker;
   pace: Pacer;
   config: ChecksConfig;
   now: number;
+  progress: Progress;
+  // Set once HubSpot's rate limit has run out: no more calls are made.
+  stopped?: LimitKind;
 };
 
-// What a phase adds to the report, or a stop because the key was rejected.
-type PhaseResult =
-  | { findings: Finding[]; notes: string[]; runs: CheckRun[] }
-  | { abort: HubSpotErrorKind };
+// What happens to a failed call: the key or the user ended the scan
+// ("abort"), HubSpot's limit ran out ("stop", keep what we have), or just
+// this check is skipped.
+function classify(ctx: ScanContext, kind: HubSpotErrorKind): "abort" | "stop" | "skip" {
+  if (kind === "invalid_token" || kind === "cancelled") return "abort";
+  if (kind === "rate_limited" || kind === "daily_limit") {
+    ctx.stopped = kind;
+    return "stop";
+  }
+  return "skip";
+}
+
+const LIMIT_REASON = "not run: HubSpot's rate limit ran out first";
 
 function problemNote(kind: HubSpotErrorKind, scope: string): string {
   return kind === "missing_scope"
@@ -194,14 +237,45 @@ function cappedNote(f: Finding): string[] {
     : [];
 }
 
-async function runRecordChecks(
-  ctx: ScanContext,
-  objectType: ObjectType,
-  propertyNames: Set<string>,
-  totalRecords: number,
-): Promise<PhaseResult> {
-  const { client, counter, pace, config, now } = ctx;
+// Results of the setup phase for one object.
+type ObjectSetup = {
+  objectType: ObjectType;
+  props?: PropertyDef[];
+  propertyNames: Set<string>;
+  total?: number;
+};
+
+const runnableCountChecks = (setup: ObjectSetup) =>
+  COUNT_CHECKS.filter(
+    (c) => c.objectType === setup.objectType && c.requiredProps.every((p) => setup.propertyNames.has(p)),
+  );
+
+// Calls the checks phase will make for one object, known once setup is done.
+// Count checks that need more than one page add theirs as they find out.
+function plannedCalls(setup: ObjectSetup, config: ChecksConfig, now: number): number {
+  if (!setup.props || !setup.total) return 0;
+  const countChecks = runnableCountChecks(setup);
+  const populations = new Set(
+    countChecks.flatMap((c) => (c.populationFilterGroups ? [JSON.stringify(c.populationFilterGroups())] : [])),
+  );
+  const window = WINDOW_CHECKS[setup.objectType];
+  const windowPages =
+    window && window.properties.every((p) => setup.propertyNames.has(p))
+      ? pagesFor(Math.min(config.records.recordWindow, setup.total))
+      : 0;
+  return fillRateCandidates(setup.props, now, config).length + countChecks.length + populations.size + windowPages;
+}
+
+type PhaseResult =
+  | { findings: Finding[]; notes: string[]; runs: CheckRun[] }
+  | { abort: HubSpotErrorKind };
+
+async function runRecordChecks(ctx: ScanContext, setup: ObjectSetup): Promise<PhaseResult> {
+  const { transport, tracker, pace, config, now, progress } = ctx;
+  const { objectType, propertyNames } = setup;
+  const totalRecords = setup.total!;
   const label = OBJECT_LABELS[objectType];
+  const noun = OBJECT_NOUNS[objectType];
   const category = CATEGORY_FOR_OBJECT[objectType];
   const findings: Finding[] = [];
   const notes: string[] = [];
@@ -217,19 +291,26 @@ async function runRecordChecks(
     const key = JSON.stringify(groups);
     const known = populations.get(key);
     if (known !== undefined) return { ok: true as const, data: known };
-    const result = await countWhere(client, counter, pace, objectType, groups);
+    const result = await countWhere(transport, tracker, pace, objectType, groups);
     if (result.ok) populations.set(key, result.data);
     return result;
   }
 
   // Count checks: the first page gives the total and samples; further pages,
   // up to the work-list cap, give the export IDs.
-  for (const check of COUNT_CHECKS.filter((c) => c.objectType === objectType)) {
+  const countChecks = COUNT_CHECKS.filter((c) => c.objectType === objectType);
+  progress.phase(`Counting ${noun} record problems`, `0 of ${countChecks.length}`);
+  for (const [i, check] of countChecks.entries()) {
     const meta = countCheckMeta(check, config);
-    const skip = (reason: string) => {
-      notes.push(`"${meta.title}" skipped: ${reason}.`);
+    const skip = (reason: string, note = true) => {
+      if (note) notes.push(`"${meta.title}" skipped: ${reason}.`);
       runs.push(...skippedChecks([meta], category, objectType, reason));
     };
+    if (ctx.stopped) {
+      skip(LIMIT_REASON, false);
+      continue;
+    }
+    progress.detail(`${i + 1} of ${countChecks.length}`);
 
     const absent = check.requiredProps.filter((p) => !propertyNames.has(p));
     if (absent.length) {
@@ -237,8 +318,8 @@ async function runRecordChecks(
       continue;
     }
     const matched = await fetchMatching(
-      client,
-      counter,
+      transport,
+      tracker,
       pace,
       objectType,
       {
@@ -247,16 +328,19 @@ async function runRecordChecks(
         sorts: [{ propertyName: "createdate", direction: "DESCENDING" }],
       },
       Math.max(config.records.workListCap, config.sampleCap),
+      { onTotal: (_total, pages) => progress.plan(pages - 1) },
     );
     if (!matched.ok) {
-      if (matched.kind === "invalid_token") return { abort: matched.kind };
-      skip(problemNote(matched.kind, scope));
+      const outcome = classify(ctx, matched.kind);
+      if (outcome === "abort") return { abort: matched.kind };
+      skip(outcome === "stop" ? LIMIT_REASON : problemNote(matched.kind, scope), outcome === "skip");
       continue;
     }
     const population = await populationOf(check);
     if (!population.ok) {
-      if (population.kind === "invalid_token") return { abort: population.kind };
-      skip(problemNote(population.kind, scope));
+      const outcome = classify(ctx, population.kind);
+      if (outcome === "abort") return { abort: population.kind };
+      skip(outcome === "stop" ? LIMIT_REASON : problemNote(population.kind, scope), outcome === "skip");
       continue;
     }
 
@@ -273,26 +357,31 @@ async function runRecordChecks(
   // Window checks: field values from the most recently created records.
   const windowCheck = WINDOW_CHECKS[objectType];
   if (!windowCheck) return { findings, notes, runs };
-  const skipWindow = (reason: string) => {
-    notes.push(`${label} duplicate checks skipped: ${reason}.`);
+  const skipWindow = (reason: string, note = true) => {
+    if (note) notes.push(`${label} duplicate checks skipped: ${reason}.`);
     runs.push(...skippedChecks(windowCheck.metas, category, objectType, reason));
     return { findings, notes, runs };
   };
+  if (ctx.stopped) return skipWindow(LIMIT_REASON, false);
 
   const absent = windowCheck.properties.filter((p) => !propertyNames.has(p));
   if (absent.length) return skipWindow(`this portal has no ${absent.join(", ")} property`);
 
+  const pages = pagesFor(Math.min(config.records.recordWindow, totalRecords));
+  progress.phase(`Reading recent ${objectType} for duplicates`, `page 1 of ${pages}`);
   const window = await fetchRecentWindow(
-    client,
-    counter,
+    transport,
+    tracker,
     pace,
     objectType,
     windowCheck.properties,
     config.records.recordWindow,
+    { onPage: (fetched) => progress.detail(`page ${Math.min(pages, Math.ceil(fetched / 200) + 1)} of ${pages}`) },
   );
   if (!window.ok) {
-    if (window.kind === "invalid_token") return { abort: window.kind };
-    return skipWindow(problemNote(window.kind, scope));
+    const outcome = classify(ctx, window.kind);
+    if (outcome === "abort") return { abort: window.kind };
+    return skipWindow(outcome === "stop" ? LIMIT_REASON : problemNote(window.kind, scope), outcome === "skip");
   }
   const found = windowCheck.run(window.data, config);
   findings.push(...found);
@@ -314,127 +403,183 @@ async function runRecordChecks(
   return { findings, notes, runs };
 }
 
-export async function runScan(
-  token: string,
-  config: ChecksConfig = CHECKS_CONFIG,
-  scoring: ScoringConfig = SCORING_CONFIG,
-): Promise<ScanResult> {
+export async function runScan(transport: Transport, options: ScanOptions = {}): Promise<ScanResult> {
+  const config = options.config ?? CHECKS_CONFIG;
+  const scoring = options.scoring ?? SCORING_CONFIG;
+  const simulated = options.simulated ?? false;
   const started = performance.now();
+
+  const tracker = newTracker({ signal: options.signal, retry: options.retry, sleep: options.sleep });
+  const progress = createProgress({
+    emit: options.onProgress ?? (() => {}),
+    counts: () => ({ calls: tracker.calls, retries: tracker.retries }),
+    simulated,
+  });
+  tracker.onCall = () => progress.tick();
+  tracker.onRetryWait = (w) => progress.waiting(w.delayMs, w.retry, w.maxRetries);
   const ctx: ScanContext = {
-    client: makeClient(token),
-    counter: { calls: 0 },
+    transport,
+    tracker,
     pace: createPacer(config.searchMinIntervalMs),
     config,
     now: Date.now(),
+    progress,
   };
-  const { client, counter, pace } = ctx;
+  const { pace } = ctx;
 
-  const account = await getAccountDetails(client, counter);
+  // Setup: account, then each object's property list and record total. After
+  // this the scan knows how many calls the checks will make.
+  progress.plan(1 + OBJECT_TYPES.length * 2);
+  progress.phase("Reading portal setup");
+  const account = await getAccountDetails(transport, tracker);
+  // With no account details there's nothing to report, even when the cause
+  // is the rate limit.
   if (!account.ok) return { ok: false, kind: account.kind };
 
   const scannedObjects: ObjectType[] = [];
   const notes: string[] = [];
   const findings: Finding[] = [];
   const runs: CheckRun[] = [];
+  const setups: ObjectSetup[] = [];
 
   for (const objectType of OBJECT_TYPES) {
     const label = OBJECT_LABELS[objectType];
     const category = CATEGORY_FOR_OBJECT[objectType];
+    const setup: ObjectSetup = { objectType, propertyNames: new Set() };
+    setups.push(setup);
+    const allMetas = [...PROPERTY_LIST_CHECKS.map((c) => c.meta), nearZeroFill(config)];
+    if (ctx.stopped) {
+      runs.push(
+        ...skippedChecks(allMetas, "Properties", objectType, LIMIT_REASON),
+        ...skippedChecks(recordCheckMetas(objectType, config), category, objectType, LIMIT_REASON),
+      );
+      continue;
+    }
+
+    const props = await listProperties(transport, tracker, objectType);
+    if (!props.ok) {
+      const outcome = classify(ctx, props.kind);
+      if (outcome === "abort") return { ok: false, kind: props.kind };
+      const reason = outcome === "stop" ? LIMIT_REASON : problemNote(props.kind, `crm.schemas.${objectType}.read`);
+      if (outcome === "skip") notes.push(`${label} skipped: ${reason}.`);
+      runs.push(
+        ...skippedChecks(allMetas, "Properties", objectType, reason),
+        ...skippedChecks(recordCheckMetas(objectType, config), category, objectType, reason),
+      );
+      continue;
+    }
+    setup.props = props.data;
+    setup.propertyNames = new Set(props.data.map((p) => p.name));
+    scannedObjects.push(objectType);
+
     // Fill rate and record checks need record access, which uses a different scope.
-    const skipRecordAccess = (reason: string) => {
-      notes.push(`${label} fill-rate and record checks skipped: ${reason}.`);
+    const skipRecordAccess = (reason: string, note = true) => {
+      if (note) notes.push(`${label} fill-rate and record checks skipped: ${reason}.`);
       runs.push(
         ...skippedChecks([nearZeroFill(config)], "Properties", objectType, reason),
         ...skippedChecks(recordCheckMetas(objectType, config), category, objectType, reason),
       );
     };
-
-    const props = await listProperties(client, counter, objectType);
-    if (!props.ok) {
-      if (props.kind === "invalid_token") return { ok: false, kind: props.kind };
-      const reason = problemNote(props.kind, `crm.schemas.${objectType}.read`);
-      notes.push(`${label} skipped: ${reason}.`);
-      runs.push(
-        ...skippedChecks(
-          [...PROPERTY_LIST_CHECKS.map((c) => c.meta), nearZeroFill(config)],
-          "Properties",
-          objectType,
-          reason,
-        ),
-        ...skippedChecks(recordCheckMetas(objectType, config), category, objectType, reason),
-      );
-      continue;
-    }
-    scannedObjects.push(objectType);
-
-    // Some functions report two checks (exact and near duplicates), so each
-    // function runs once and its findings are matched to both.
-    const listFindings = [...new Set(PROPERTY_LIST_CHECKS.map((c) => c.run))].flatMap((run) =>
-      run(objectType, props.data, config),
-    );
-    findings.push(...listFindings);
-    runs.push(
-      ...PROPERTY_LIST_CHECKS.map((c) =>
-        ranCheck(c.meta, "Properties", objectType, c.population(props.data), listFindings),
-      ),
-    );
-
-    const total = await countRecords(client, counter, pace, objectType);
+    const total = await countRecords(transport, tracker, pace, objectType);
     if (!total.ok) {
-      if (total.kind === "invalid_token") return { ok: false, kind: total.kind };
-      skipRecordAccess(problemNote(total.kind, `crm.objects.${objectType}.read`));
+      const outcome = classify(ctx, total.kind);
+      if (outcome === "abort") return { ok: false, kind: total.kind };
+      skipRecordAccess(
+        outcome === "stop" ? LIMIT_REASON : problemNote(total.kind, `crm.objects.${objectType}.read`),
+        outcome === "skip",
+      );
       continue;
     }
     if (total.data === 0) {
       skipRecordAccess("no records yet");
       continue;
     }
+    setup.total = total.data;
+  }
 
-    const candidates = fillRateCandidates(props.data, ctx.now, config);
-    const filled = new Map<string, number>();
-    let failed = 0;
-    for (const p of candidates) {
-      const count = await countRecords(client, counter, pace, objectType, p.name);
-      if (count.ok) filled.set(p.name, count.data);
-      else if (count.kind === "invalid_token") return { ok: false, kind: count.kind };
-      else failed++;
-    }
-    if (failed) {
-      notes.push(`${label}: couldn't measure fill rate for ${failed} of ${candidates.length} properties.`);
-    }
-    const fillFindings = checkFillRate(objectType, candidates, filled, total.data, config);
-    findings.push(...fillFindings);
+  progress.beginChecks(setups.reduce((n, setup) => n + plannedCalls(setup, config, ctx.now), 0));
+
+  // Checks, object by object.
+  for (const setup of setups) {
+    const { objectType, props } = setup;
+    if (!props) continue;
+    const label = OBJECT_LABELS[objectType];
+    const noun = OBJECT_NOUNS[objectType];
+
+    progress.phase(`Checking ${noun} properties`);
+    // Some functions report two checks (exact and near duplicates), so each
+    // function runs once and its findings are matched to both.
+    const listFindings = [...new Set(PROPERTY_LIST_CHECKS.map((c) => c.run))].flatMap((run) =>
+      run(objectType, props, config),
+    );
+    findings.push(...listFindings);
     runs.push(
-      ranCheck(nearZeroFill(config), "Properties", objectType, fillRatePopulation(candidates, filled), fillFindings),
+      ...PROPERTY_LIST_CHECKS.map((c) =>
+        ranCheck(c.meta, "Properties", objectType, c.population(props), listFindings),
+      ),
     );
+    if (setup.total === undefined) continue;
 
-    const records = await runRecordChecks(
-      ctx,
-      objectType,
-      new Set(props.data.map((p) => p.name)),
-      total.data,
-    );
+    // Fill rate.
+    const fill = nearZeroFill(config);
+    if (ctx.stopped) {
+      runs.push(...skippedChecks([fill], "Properties", objectType, LIMIT_REASON));
+    } else {
+      const candidates = fillRateCandidates(props, ctx.now, config);
+      const filled = new Map<string, number>();
+      let failed = 0;
+      progress.phase(`Measuring ${noun} fill rates`, `0 of ${candidates.length}`);
+      for (const [i, p] of candidates.entries()) {
+        const count = await countRecords(transport, tracker, pace, objectType, p.name);
+        progress.detail(`${i + 1} of ${candidates.length}`);
+        if (count.ok) {
+          filled.set(p.name, count.data);
+          continue;
+        }
+        const outcome = classify(ctx, count.kind);
+        if (outcome === "abort") return { ok: false, kind: count.kind };
+        if (outcome === "stop") break;
+        failed++;
+      }
+      if (ctx.stopped) {
+        // A half-measured fill rate would be misleading, so none is scored.
+        runs.push(...skippedChecks([fill], "Properties", objectType, LIMIT_REASON));
+      } else {
+        if (failed) {
+          notes.push(`${label}: couldn't measure fill rate for ${failed} of ${candidates.length} properties.`);
+        }
+        const fillFindings = checkFillRate(objectType, candidates, filled, setup.total, config);
+        findings.push(...fillFindings);
+        runs.push(ranCheck(fill, "Properties", objectType, fillRatePopulation(candidates, filled), fillFindings));
+      }
+    }
+
+    const records = await runRecordChecks(ctx, setup);
     if ("abort" in records) return { ok: false, kind: records.abort };
     findings.push(...records.findings);
     notes.push(...records.notes);
     runs.push(...records.runs);
   }
 
+  progress.phase("Scoring");
   findings.sort(
     (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count,
   );
-
-  return {
-    ok: true,
-    report: {
-      portal: account.data,
-      scannedObjects,
-      notes,
-      findings,
-      checks: runs,
-      score: scoreChecks(runs, scoring),
-      apiCalls: counter.calls,
-      durationMs: Math.round(performance.now() - started),
-    },
+  const report: ScanReport = {
+    portal: account.data,
+    scannedObjects,
+    notes,
+    findings,
+    checks: runs,
+    score: scoreChecks(runs, scoring),
+    apiCalls: tracker.calls,
+    retries: tracker.retries,
+    durationMs: Math.round(performance.now() - started),
+    simulated,
+    ...(ctx.stopped && {
+      incomplete: { kind: ctx.stopped, message: limitMessage(ctx.stopped, account.data.timeZone) },
+    }),
   };
+  progress.finish(ctx.stopped ? "Stopped early: HubSpot rate limit" : "Done");
+  return { ok: true, report };
 }
