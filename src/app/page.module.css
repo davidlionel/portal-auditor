@@ -227,8 +227,17 @@
   border-top: 1px solid var(--border);
 }
 
+/* Keep each scope name whole: "anywhere" let the column shrink and split
+   names mid-word. break-word only breaks a name too long for a line. */
 .scopeTable code {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .scopeTable code {
+    white-space: normal;
+  }
 }
 
 .categoryHeading {

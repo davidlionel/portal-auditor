@@ -1,5 +1,9 @@
 # Portal Health Auditor
 
+**Live demo: [portal-auditor-two.vercel.app](https://portal-auditor-two.vercel.app/)** · [Sample report](https://portal-auditor-two.vercel.app/demo)
+
+[![Sample report: a health score of 56 out of 100 with category scores and the top 5 fixes](docs/report-screenshot.png)](https://portal-auditor-two.vercel.app/demo)
+
 A web app that connects to a HubSpot portal with a read-only service key, scans it for data and configuration problems, and returns a health score with a ranked fix list.
 
 **Status:** early build. The app runs property and record checks on contacts, companies and deals, scores the portal out of 100, lists the top 5 fixes, and exports CSVs.
