@@ -1,9 +1,10 @@
+import { rateText } from "@/lib/checks/population";
 import { CATEGORY_ORDER, checkKey, type Finding } from "@/lib/checks/types";
 import type { AccountDetails } from "@/lib/hubspot/client";
 import { recordUrl } from "@/lib/hubspot/links";
 import type { ObjectType } from "@/lib/hubspot/properties";
 import type { ScanReport } from "@/lib/scan";
-import { checkRate, topFixes } from "@/lib/scoring";
+import { topFixes } from "@/lib/scoring";
 import { ExportButtons } from "./export-buttons";
 import { SimulatedBanner } from "./progress-card";
 import styles from "./page.module.css";
@@ -46,13 +47,8 @@ function RecordId({
 
 const findingAnchor = (f: Finding) => `finding-${checkKey(f).replace(/[.:]/g, "-")}`;
 
-const pct = (rate: number) => `${+(rate * 100).toFixed(rate < 0.01 ? 2 : 1)}%`;
-
 const points = (n: number) => `+${n.toFixed(1)} pts`;
 
-// "3 of 41 checked (7.3%)": the numbers behind a finding's score.
-const rateText = (f: Finding) =>
-  `${f.affected.toLocaleString("en-US")} of ${f.population.toLocaleString("en-US")} checked (${pct(checkRate(f))})`;
 
 function scoreClass(score: number) {
   if (score >= 80) return styles.scoreGood;

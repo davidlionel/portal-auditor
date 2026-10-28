@@ -20,6 +20,9 @@ export type CountCheck = {
   // The records the rate is measured against, when that's narrower than all
   // records of the object (Customers, open deals). One more Search total.
   populationFilterGroups?: () => FilterGroup[];
+  // What that narrower population is called, singular and plural, for "35 of
+  // 66 customers affected". Without it, the object's own name is used.
+  populationNoun?: [string, string];
   why: string;
   fix: string;
 };
@@ -50,6 +53,7 @@ export const COUNT_CHECKS: CountCheck[] = [
       { filters: [eq("lifecyclestage", "customer"), missing("recent_deal_close_date")] },
     ],
     populationFilterGroups: () => [{ filters: [eq("lifecyclestage", "customer")] }],
+    populationNoun: ["customer", "customers"],
     why: "Customer counts and revenue attribution disagree when contacts are Customers with no won deal behind them.",
     fix: "Check each contact: associate the won deal (a deal on the company alone doesn't count here), or move the contact back to the right stage.",
   },
@@ -90,6 +94,7 @@ export const COUNT_CHECKS: CountCheck[] = [
       { filters: [eq("hs_is_closed", "false")] },
       { filters: [eq("hs_is_closed_won", "true")] },
     ],
+    populationNoun: ["open or won deal", "open or won deals"],
     why: "Deals without an amount count as zero in the forecast and revenue reports.",
     fix: "Make Amount required at the deal stages where it's known, then fill it in on these deals.",
   },
@@ -101,6 +106,7 @@ export const COUNT_CHECKS: CountCheck[] = [
     requiredProps: ["closedate", "hs_is_closed"],
     filterGroups: () => [{ filters: [missing("closedate"), eq("hs_is_closed", "false")] }],
     populationFilterGroups: openDeals,
+    populationNoun: ["open deal", "open deals"],
     why: "Deals without a close date fall out of every forecast period.",
     fix: "Make Close date required when a deal is created, then set an expected date on these deals.",
   },
@@ -123,6 +129,7 @@ export const COUNT_CHECKS: CountCheck[] = [
       },
     ],
     populationFilterGroups: openDeals,
+    populationNoun: ["open deal", "open deals"],
     why: "Deals stuck in one stage make the pipeline look bigger than it is.",
     fix: "Review each deal with its owner: move it forward, close it as lost, or update the close date.",
   },

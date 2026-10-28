@@ -213,33 +213,6 @@
   overflow-wrap: anywhere;
 }
 
-.scopeTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.scopeTable th,
-.scopeTable td {
-  text-align: left;
-  vertical-align: top;
-  padding: 6px 8px 6px 0;
-  border-top: 1px solid var(--border);
-}
-
-/* Keep each scope name whole: "anywhere" let the column shrink and split
-   names mid-word. break-word only breaks a name too long for a line. */
-.scopeTable code {
-  overflow-wrap: break-word;
-  white-space: nowrap;
-}
-
-@media (max-width: 480px) {
-  .scopeTable code {
-    white-space: normal;
-  }
-}
-
 .categoryHeading {
   margin-top: 8px;
   font-size: 1.125rem;
@@ -407,4 +380,29 @@
 
 .demoBanner strong {
   color: var(--ok);
+}
+
+.pitch {
+  font-size: 1.0625rem;
+}
+
+.pitchList {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.screenshotLink {
+  display: block;
+  margin: 18px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.screenshot {
+  display: block;
+  width: 100%;
+  height: auto;
 }

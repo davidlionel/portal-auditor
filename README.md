@@ -2,7 +2,7 @@
 
 **Live demo: [portal-auditor-two.vercel.app](https://portal-auditor-two.vercel.app/)** · [Sample report](https://portal-auditor-two.vercel.app/demo)
 
-[![Sample report: a health score of 56 out of 100 with category scores and the top 5 fixes](docs/report-screenshot.png)](https://portal-auditor-two.vercel.app/demo)
+[![Sample report: a health score of 56 out of 100 with category scores and the top 5 fixes](public/report-screenshot.png)](https://portal-auditor-two.vercel.app/demo)
 
 A web app that connects to a HubSpot portal with a read-only service key, scans it for data and configuration problems, and returns a health score with a ranked fix list.
 
@@ -79,7 +79,7 @@ Scanning runs on your own machine, so your service key never leaves it except to
    cd portal-auditor
    npm install
    ```
-2. **Create a service key** in HubSpot under **Development > Keys > Service keys**, ticking only the six read-only scopes in [Scopes to tick on the service key](#scopes-to-tick-on-the-service-key). Start with a developer test portal or sandbox rather than a portal with client data.
+2. **Create a service key** in HubSpot under **Development > Keys > Service keys**, ticking only the six read-only scopes in [Scopes to tick on the service key](#scopes-to-tick-on-the-service-key) below. Start with a developer test portal or sandbox rather than a portal with client data.
 3. **Turn on live scanning.** Create a file named `.env.local` in the project folder (it's gitignored, and works the same in PowerShell, cmd and bash) containing:
    ```
    ENABLE_LIVE_SCAN=true
@@ -87,6 +87,16 @@ Scanning runs on your own machine, so your service key never leaves it except to
 4. **Start the app** with `npm run dev`, open http://localhost:3000, paste the key and click **Run scan**.
 
 The key is pasted into the page for each scan, not saved in `.env.local`. Live scanning is off unless that line is present, which is how the public demo stays demo-only. The home page reads the setting when the app is built, so after changing it on a deployment, redeploy; the scan endpoint checks it on every request regardless.
+
+### Scopes to tick on the service key
+
+| Scope | Used for | Why |
+|---|---|---|
+| `crm.schemas.contacts.read`, `crm.schemas.companies.read`, `crm.schemas.deals.read` | `GET /crm/properties/2026-09/{object}` | List property definitions: labels, descriptions, dropdown options |
+| `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search` | Count records for fill rates and record checks; read name, company, email and domain on recent records for duplicate and email checks |
+| none listed in HubSpot's docs | `GET /account-info/2026-09/details` | Confirms which portal is connected (Hub ID, account type, data center) |
+
+Every scope is read-only. If one is missing, the scan skips that object or check and says so in the report.
 
 ### Refresh the sample report
 
@@ -132,7 +142,7 @@ The production check starts the built app with `ENABLE_SIMULATOR=true` and confi
 
 ## Why a service key
 
-HubSpot recommends service keys for single-account API access, and legacy private apps no longer get new scopes or features. Create one in HubSpot under **Development > Keys > Service keys** and tick only the scopes in the table below. Service keys work for REST API calls only, which is all this app makes.
+HubSpot recommends service keys for single-account API access, and legacy private apps no longer get new scopes or features. Create one in HubSpot under **Development > Keys > Service keys** and tick only the scopes listed in [Scopes to tick on the service key](#scopes-to-tick-on-the-service-key). Service keys work for REST API calls only, which is all this app makes.
 
 ## Key handling
 
@@ -163,16 +173,6 @@ HubSpot returns 429 when a limit is hit, with the limit's name in the response (
 - **Stops cleanly when retries run out.** The scan makes no more calls and returns what it has: the report is marked **Incomplete: HubSpot rate limit** at the top, the checks that didn't run are listed as not scored, and the score covers only the checks that finished.
 
 Every attempt counts toward the report's API call total, and retries are shown separately. Retry settings live in `src/config/requests.ts`.
-
-## Scopes to tick on the service key
-
-| Scope | Used for | Why |
-|---|---|---|
-| `crm.schemas.contacts.read`, `crm.schemas.companies.read`, `crm.schemas.deals.read` | `GET /crm/properties/2026-09/{object}` | List property definitions: labels, descriptions, dropdown options |
-| `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search` | Count records for fill rates and record checks; read name, company, email and domain on recent records for duplicate and email checks |
-| none listed in HubSpot's docs | `GET /account-info/2026-09/details` | Confirms which portal is connected (Hub ID, account type, data center) |
-
-Every scope is read-only. If one is missing, the scan skips that object or check and says so in the report.
 
 ## API usage
 
