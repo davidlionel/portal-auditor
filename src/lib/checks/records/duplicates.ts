@@ -8,9 +8,9 @@ const MAX_IDS_PER_GROUP = 5;
 
 export const DUPLICATE_TOOL_PATH = {
   contacts:
-    "CRM > Contacts, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)",
+    "CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)",
   companies:
-    "CRM > Companies, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)",
+    "CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)",
 };
 
 export const DUPLICATE_CONTACTS: CheckMeta = {

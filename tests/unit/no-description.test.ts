@@ -35,4 +35,14 @@ describe("no-description", () => {
     const [custom] = checkNoDescription("contacts", props, { ...CHECKS_CONFIG, sampleCap: 3 });
     assert.equal(custom.samples.length, 3);
   });
+
+  it("keeps every affected property for the playbook, up to the work-list cap", () => {
+    const props = Array.from({ length: 15 }, (_, i) => prop({ name: `p${i}`, description: "" }));
+    const [real] = checkNoDescription("contacts", props);
+    assert.deepEqual(real.items, props.map((p) => p.name));
+
+    const capped = { ...CHECKS_CONFIG, records: { ...CHECKS_CONFIG.records, workListCap: 4 } };
+    const [custom] = checkNoDescription("contacts", props, capped);
+    assert.deepEqual(custom.items, ["p0", "p1", "p2", "p3"]);
+  });
 });

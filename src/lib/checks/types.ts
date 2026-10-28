@@ -21,6 +21,9 @@ export type Finding = {
   population: number;
   // Up to the sample cap. For property checks these are property names.
   samples: string[];
+  // Property checks: every affected item in the same form as samples, up to
+  // the work-list cap, so the playbook can list them all.
+  items?: string[];
   // Record checks: up to the sample cap of record ID groups. A group has one
   // ID for single-record problems and several for duplicates.
   recordSamples?: string[][];

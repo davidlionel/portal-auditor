@@ -14,13 +14,13 @@ export type DemoSnapshot = {
 const ALLOWED_KEYS = {
   snapshot: ["scannedAt", "appVersion", "report"],
   report: [
-    "portal", "scannedObjects", "notes", "findings", "checks", "score",
+    "scannedAt", "portal", "scannedObjects", "notes", "findings", "checks", "score",
     "apiCalls", "retries", "durationMs", "simulated", "incomplete",
   ],
   portal: ["portalId", "accountType", "timeZone", "companyCurrency", "uiDomain", "dataHostingLocation"],
   finding: [
     "checkId", "title", "category", "objectType", "severity", "count", "affected", "population",
-    "samples", "recordSamples", "records", "why", "fix",
+    "samples", "items", "recordSamples", "records", "why", "fix",
   ],
   record: ["id", "group"],
   check: ["checkId", "title", "severity", "category", "objectType", "status", "affected", "population", "reason"],

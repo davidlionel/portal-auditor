@@ -1,5 +1,6 @@
 import { rateText } from "@/lib/checks/population";
 import { CATEGORY_ORDER, checkKey, type Finding } from "@/lib/checks/types";
+import { accountTypeLabel } from "@/lib/hubspot/account-types";
 import type { AccountDetails } from "@/lib/hubspot/client";
 import { recordUrl } from "@/lib/hubspot/links";
 import type { ObjectType } from "@/lib/hubspot/properties";
@@ -8,13 +9,6 @@ import { topFixes } from "@/lib/scoring";
 import { ExportButtons } from "./export-buttons";
 import { SimulatedBanner } from "./progress-card";
 import styles from "./page.module.css";
-
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  DEVELOPER_TEST: "Developer test portal",
-  SANDBOX: "Sandbox",
-  STANDARD: "Standard portal",
-  APP_DEVELOPER: "App developer account",
-};
 
 const OBJECT_LABELS: Record<string, string> = {
   contacts: "Contacts",
@@ -94,7 +88,7 @@ function ScoreCard({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
           <span className={`${styles.badge} ${styles.simulatedBadge}`}>Simulated</span>
         ) : (
           <span className={styles.badge}>
-            {ACCOUNT_TYPE_LABELS[report.portal.accountType] ?? report.portal.accountType}
+            {accountTypeLabel(report.portal.accountType)}
           </span>
         )}
       </div>

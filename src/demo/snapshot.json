@@ -1,7 +1,8 @@
 {
-  "scannedAt": "2026-10-28T15:40:16.917Z",
+  "scannedAt": "2026-10-28T19:48:26.311Z",
   "appVersion": "0.1.0",
   "report": {
+    "scannedAt": "2026-10-28T19:48:26.307Z",
     "portal": {
       "portalId": 247313672,
       "accountType": "DEVELOPER_TEST",
@@ -16,8 +17,8 @@
       "deals"
     ],
     "notes": [
-      "Contacts duplicate and email checks covered all 222 contacts. HubSpot's own duplicate tool scans the whole portal: CRM > Contacts, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
-      "Companies duplicate checks covered all 139 companies. HubSpot's own duplicate tool scans the whole portal: CRM > Companies, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)."
+      "Contacts duplicate and email checks covered all 222 contacts. HubSpot's own duplicate tool scans the whole portal: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
+      "Companies duplicate checks covered all 139 companies. HubSpot's own duplicate tool scans the whole portal: CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)."
     ],
     "findings": [
       {
@@ -80,7 +81,7 @@
         "category": "Companies",
         "objectType": "companies",
         "why": "Contacts and deals get split across copies of the same company, so account views and revenue roll-ups are incomplete.",
-        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Companies, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
+        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
         "count": 3,
         "affected": 10,
         "population": 139,
@@ -152,7 +153,7 @@
         "category": "Contacts",
         "objectType": "contacts",
         "why": "Duplicates split activity history between records, so owners miss context and reports double-count people.",
-        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Contacts, then the ⋮ menu > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
+        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
         "count": 2,
         "affected": 4,
         "population": 222,
@@ -196,6 +197,9 @@
         "affected": 1,
         "population": 4,
         "samples": [
+          "audit_test_source: Webinar / webinar"
+        ],
+        "items": [
           "audit_test_source: Webinar / webinar"
         ],
         "why": "Records split across variants like Webinar / webinar, so segments, workflows and reports miss some of them.",
@@ -1180,6 +1184,11 @@
           "combined_score_10_15_2026_12_35_pm_total (\"Total Score\") / total_score (\"Total Score\")",
           "lead_source_test (\"Lead Source Test\") / lead_source_test_2 (\"Lead source test\")"
         ],
+        "items": [
+          "combined_score_10_15_2026_12_35_pm_engagement (\"Engagement Score\") / engagement_score (\"Engagement Score\")",
+          "combined_score_10_15_2026_12_35_pm_total (\"Total Score\") / total_score (\"Total Score\")",
+          "lead_source_test (\"Lead Source Test\") / lead_source_test_2 (\"Lead source test\")"
+        ],
         "why": "Users can't tell which field to use, so data splits across both and reports undercount.",
         "fix": "Pick one property to keep, migrate values from the other, then archive the duplicate."
       },
@@ -1257,6 +1266,9 @@
         "affected": 1,
         "population": 2,
         "samples": [
+          "sync_status (0.45%)"
+        ],
+        "items": [
           "sync_status (0.45%)"
         ],
         "why": "Unused fields clutter forms and records, and reports built on them show misleading blanks.",
@@ -1393,6 +1405,18 @@
           "sync_status",
           "total_score"
         ],
+        "items": [
+          "audit_test_source",
+          "engagement_last_decayed",
+          "engagement_score",
+          "lead_source_test",
+          "lead_source_test_2",
+          "negative_score",
+          "routing_quadrant",
+          "sql_rejection_reason",
+          "sync_status",
+          "total_score"
+        ],
         "why": "Without a description, users guess what a field means and fill it inconsistently.",
         "fix": "Add a one-line description to each property saying what it holds and who fills it."
       },
@@ -1414,6 +1438,15 @@
           "open_job_count",
           "segment"
         ],
+        "items": [
+          "fit_industry_points",
+          "fit_score",
+          "fit_signal_points",
+          "fit_size_points",
+          "has_ops_person",
+          "open_job_count",
+          "segment"
+        ],
         "why": "Without a description, users guess what a field means and fill it inconsistently.",
         "fix": "Add a one-line description to each property saying what it holds and who fills it."
       },
@@ -1427,6 +1460,12 @@
         "affected": 4,
         "population": 7,
         "samples": [
+          "deal_source",
+          "imported_create_date",
+          "rep_name",
+          "skipped_qualification"
+        ],
+        "items": [
           "deal_source",
           "imported_create_date",
           "rep_name",
@@ -1768,7 +1807,7 @@
     },
     "apiCalls": 30,
     "retries": 0,
-    "durationMs": 7968,
+    "durationMs": 8346,
     "simulated": false
   }
 }

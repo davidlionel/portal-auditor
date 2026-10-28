@@ -14,6 +14,8 @@ export const fillRatePopulation = (candidates: PropertyDef[], filled: Map<string
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const describeLow = ({ p, rate }: { p: PropertyDef; rate: number }) => `${p.name} (${(rate * 100).toFixed(2)}%)`;
+
 // Which custom properties are worth measuring. The scan only spends search
 // calls on these.
 export function fillRateCandidates(
@@ -54,9 +56,8 @@ export function checkFillRate(
       count: low.length,
       affected: low.length,
       population: fillRatePopulation(candidates, filled),
-      samples: low
-        .slice(0, config.sampleCap)
-        .map(({ p, rate }) => `${p.name} (${(rate * 100).toFixed(2)}%)`),
+      samples: low.slice(0, config.sampleCap).map(describeLow),
+      items: low.slice(0, config.records.workListCap).map(describeLow),
       why: "Unused fields clutter forms and records, and reports built on them show misleading blanks.",
       fix: "Confirm nobody relies on each one, then archive it or start populating it through a form or workflow.",
     },

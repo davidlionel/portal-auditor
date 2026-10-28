@@ -23,6 +23,7 @@ export const duplicateLabelsPopulation = (props: PropertyDef[]) =>
 const customCount = (props: PropertyDef[]) => new Set(props.filter(isCustom).map((p) => p.name)).size;
 
 const describe = (p: PropertyDef) => `${p.name} ("${p.label}")`;
+const describeGroup = (group: PropertyDef[]) => group.map(describe).join(" / ");
 
 export function checkDuplicateLabels(
   objectType: ObjectType,
@@ -67,9 +68,8 @@ export function checkDuplicateLabels(
       count: exactGroups.length,
       affected: customCount(exactGroups.flat()),
       population: duplicateLabelsPopulation(props),
-      samples: exactGroups
-        .slice(0, config.sampleCap)
-        .map((group) => group.map(describe).join(" / ")),
+      samples: exactGroups.slice(0, config.sampleCap).map(describeGroup),
+      items: exactGroups.slice(0, config.records.workListCap).map(describeGroup),
       why: "Users can't tell which field to use, so data splits across both and reports undercount.",
       fix: "Pick one property to keep, migrate values from the other, then archive the duplicate.",
     });
@@ -82,9 +82,8 @@ export function checkDuplicateLabels(
       count: nearPairs.length,
       affected: customCount(nearPairs.flat()),
       population: duplicateLabelsPopulation(props),
-      samples: nearPairs
-        .slice(0, config.sampleCap)
-        .map(([a, b]) => `${describe(a)} / ${describe(b)}`),
+      samples: nearPairs.slice(0, config.sampleCap).map(describeGroup),
+      items: nearPairs.slice(0, config.records.workListCap).map(describeGroup),
       why: "Labels a typo apart are usually the same field created twice, which splits data between them.",
       fix: "Check whether each pair means the same thing; if so, merge into one property and archive the other.",
     });

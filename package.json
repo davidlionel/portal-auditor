@@ -11,11 +11,14 @@
     "test:scale": "tsx tests/scale/simulated-250k.ts",
     "check:simulator-prod": "next build && tsx tests/prod/simulator-blocked.ts",
     "demo:snapshot": "tsx --env-file-if-exists=.env.local scripts/demo-snapshot.ts",
-    "check:deploy": "tsx tests/prod/deployed.ts"
+    "check:deploy": "tsx tests/prod/deployed.ts",
+    "check:hubspot-docs": "tsx scripts/check-hubspot-sources.ts"
   },
   "dependencies": {
     "@hubspot/api-client": "^14.0.1",
+    "fflate": "0.8.3",
     "next": "16.4.3",
+    "pdfmake": "0.3.13",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -26,7 +29,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "unpdf": "1.9.1"
   },
   "engines": {
     "node": ">=22.9.0"

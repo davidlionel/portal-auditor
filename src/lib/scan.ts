@@ -120,6 +120,8 @@ const WINDOW_CHECKS: Partial<Record<ObjectType, WindowCheck>> = {
 export type LimitKind = "rate_limited" | "daily_limit";
 
 export type ScanReport = {
+  // ISO timestamp of when the scan finished.
+  scannedAt: string;
   portal: AccountDetails;
   scannedObjects: ObjectType[];
   // Plain-language notes on anything the scan couldn't cover.
@@ -566,6 +568,7 @@ export async function runScan(transport: Transport, options: ScanOptions = {}): 
     (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count,
   );
   const report: ScanReport = {
+    scannedAt: new Date().toISOString(),
     portal: account.data,
     scannedObjects,
     notes,

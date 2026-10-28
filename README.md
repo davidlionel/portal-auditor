@@ -6,7 +6,7 @@
 
 A web app that connects to a HubSpot portal with a read-only service key, scans it for data and configuration problems, and returns a health score with a ranked fix list.
 
-**Status:** early build. The app runs property and record checks on contacts, companies and deals, scores the portal out of 100, lists the top 5 fixes, and exports CSVs.
+**Status:** early build. The app runs property and record checks on contacts, companies and deals, scores the portal out of 100, lists the top 5 fixes, and exports CSVs and a step-by-step cleanup playbook (PDF).
 
 The deployed site is **demo-only**: it shows a sample report from a HubSpot developer test portal and never accepts a service key. To scan your own portal, [run it on your machine](#run-it-on-your-own-portal).
 
@@ -46,12 +46,33 @@ The report opens with a score out of 100, a score for each category, and the top
 
 All weights and zero-points live in `src/config/scoring.ts`. The one-line explanation on the report is built from that file, so it always matches.
 
+## Cleanup playbook
+
+After a scan, and on the sample report, **Download playbook (PDF)** gives a step-by-step cleanup guide and **Download everything (ZIP)** gives the playbook plus every CSV from that scan in one folder. Both are built in the browser from the report on the page; nothing is sent to the server or stored. The PDF code (pdfmake, about 1.6 MB) loads only when one of these buttons is clicked.
+
+- **Cover:** portal, scan date, overall and category scores, the Top 5 fixes, and "HubSpot steps verified against HubSpot's documentation on <date>", the oldest verification date among the steps it uses.
+- **One section per finding, biggest score gain first:** what's wrong, why it matters, how to fix it in HubSpot (the index-page filter, settings path and bulk action), and which CSV to use. When a HubSpot filter finds every affected record, it says "No CSV needed" and gives the filter. Only mistyped emails and duplicates need a CSV, because no filter can find them. Stale deals and deals missing an amount or close date also say how to split the work by deal owner. Each section ends with the HubSpot pages it relies on.
+- **Appendix A** describes each CSV column by column. **Appendix B** gives the import steps: Record ID, Update existing records only, a contact segment for contacts, or a "Cleanup reason" property for companies and deals.
+- **Plain black and white**, so it prints and photocopies cleanly. Characters the bundled font can't draw (arrows, Japanese, Chinese, Korean) print as "?" and the section says so.
+- **No record values:** record IDs stay in the CSVs, and the PDF holds only check text, property names, counts and portal details. No owner names or IDs anywhere.
+
+### Where the HubSpot steps come from
+
+Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (only "correct each mistyped email") is marked `general` and labelled "General guidance" in the PDF.
+
+- `npm run check:hubspot-docs` fetches every source page, fails any that redirect, return an error or no longer contain their key phrases, and always exits 0.
+- A weekly GitHub Action (`.github/workflows/hubspot-docs.yml`, Mondays, or run it from the Actions tab) runs the same check and opens one issue labelled `hubspot-docs` listing anything that failed, or comments on the open one. It never fails a build or a deploy.
+- `npm test` warns, without failing, when an entry's `lastVerified` is more than 90 days old.
+
+When a page changes, re-read it, update the entry's text, source and key phrases, and set `lastVerified` to that day.
+
 ## Exports
 
-Two CSV downloads, built in the browser from the report on the page. Nothing is sent to the server or stored.
+CSV downloads, built in the browser from the report on the page. Nothing is sent to the server or stored.
 
 - **Findings summary:** one row per finding with check, object, category, severity, count, records affected, population, rate, points recovered, why it matters and how to fix it.
-- **Records work list:** one file per object with record ID, object type, check, severity, duplicate group, HubSpot record link and a capped marker. Record IDs only: no names, emails or other field values. Records in the same duplicate group share a group number.
+- **Records work list:** one file per object with record ID, object type, check, severity, duplicate group, HubSpot record link, a capped marker and a prefilled cleanup reason (for example "Portal audit 2026-10-28: Contacts with no email address"). Record IDs only: no names, emails, owners or other field values. Records in the same duplicate group share a group number.
+- **Import files** (in the ZIP, under `imports/`): one per finding that needs a CSV (mistyped emails, duplicate contacts, duplicate companies), one row per record with Record ID, Cleanup reason and, for duplicates, the group number.
 
 Count checks page through the matching records during the scan, 200 per call, up to 1,000 per check (`records.workListCap` in `src/config/checks.ts`). When a check matches more, its rows say "first 1,000 of N" and the report notes it. The service key is discarded after the scan, so IDs can't be fetched later. Duplicate and email checks use the IDs already read from the recent-records window.
 
@@ -123,7 +144,7 @@ The simulator only runs when **both** are true: the app is a development build (
 npm test
 ```
 
-Unit tests run each check, the scoring, the CSV exports, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses.
+Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names or emails it returned appear in the playbook, the PDF or any file in the ZIP.
 
 Two slower checks run separately. Both are plain Node scripts, so they work the same in PowerShell, cmd and bash:
 
@@ -131,9 +152,10 @@ Two slower checks run separately. Both are plain Node scripts, so they work the 
 npm run test:scale            # full scan of the simulated 250K portal, about 2½ minutes
 npm run check:simulator-prod  # builds for production and proves the simulator is blocked
 npm run check:deploy -- <url> # checks a running site is demo-only (default http://localhost:3000)
+npm run check:hubspot-docs    # checks the HubSpot pages the playbook cites (needs internet)
 ```
 
-The deploy check confirms the home page has no key field, `/demo` renders the sample with a score, the scan-date banner and no HubSpot record links, `/api/scan` refuses a service key and the simulator with 403, and none of the simulator's code is in the browser scripts.
+The deploy check confirms the home page has no key field, `/demo` renders the sample with a score, the scan-date banner, the playbook and ZIP buttons and no HubSpot record links, `/api/scan` refuses a service key and the simulator with 403, and none of the simulator's code is in the browser scripts.
 
 The production check starts the built app with `ENABLE_SIMULATOR=true` and confirms the page has no simulator button, `/api/scan` refuses a simulated scan with 403, and no simulator code is in the browser bundles.
 
@@ -201,7 +223,7 @@ The window keeps duplicate checks at a fixed cost, so a portal with 1 million co
 
 ## What the record checks can miss
 
-- **Duplicates outside the window.** In a 250K-contact portal the window is the newest 4% of contacts, so a duplicate is only found when both records are recent. The report states the coverage on every scan. HubSpot's own duplicate tool (CRM > Contacts or Companies, ⋮ menu > Manage duplicates) scans the whole portal and is where duplicates should be merged.
+- **Duplicates outside the window.** In a 250K-contact portal the window is the newest 4% of contacts, so a duplicate is only found when both records are recent. The report states the coverage on every scan. HubSpot's own duplicate tool (CRM > Contacts or Companies, three vertical dots icon > Manage duplicates) scans the whole portal and is where duplicates should be merged.
 - **Near-matches.** Contact duplicates match on exact first name, last name and company name after normalizing case and punctuation (names also ignore spaces, so O'Neil matches oneil) and dropping company suffixes like Inc or Ltd. Jon / John, nicknames, typos, and "Acme Corp" vs "Acme Holdings" aren't matched. Contacts with a blank name or company name aren't checked.
 - **Subdomains.** `eu.acme.com` and `acme.com` count as different domains.
 - **Won deals on the company only.** "Customer with no closed-won deal" only sees deals associated with the contact.

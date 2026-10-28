@@ -89,6 +89,7 @@ export function checkDropdownVariants(
       affected: definiteProps.size,
       population: dropdownPopulation(props),
       samples: definite.slice(0, config.sampleCap),
+      items: definite.slice(0, config.records.workListCap),
       why: "Records split across variants like Webinar / webinar, so segments, workflows and reports miss some of them.",
       fix: "Keep one option, bulk-update records from the others to it, then delete the extra options.",
     });
@@ -102,6 +103,7 @@ export function checkDropdownVariants(
       affected: possibleProps.size,
       population: dropdownPopulation(props),
       samples: possible.slice(0, config.sampleCap),
+      items: possible.slice(0, config.records.workListCap),
       why: "Singular and plural options usually mean the same value, so records split between them.",
       fix: "Review each pair; if they mean the same thing, merge records into one option and delete the other.",
     });

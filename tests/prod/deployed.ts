@@ -36,6 +36,10 @@ async function main() {
   results.push(["sample report shows the scan date banner", /Sample report[\s\S]*scanned on/.test(demoHtml)]);
   results.push(["sample report has no HubSpot record links", !/href="https:\/\/app[^"]*\/record\//.test(demoHtml)]);
   results.push(["sample report has CSV exports", demoHtml.includes("Findings summary (CSV)")]);
+  results.push([
+    "sample report has the playbook and ZIP buttons",
+    demoHtml.includes("Download playbook (PDF)") && demoHtml.includes("Download everything (ZIP)"),
+  ]);
 
   const live = await scan({ token: "pat-na1-00000000-0000-0000-0000-000000000000" });
   results.push(["scan endpoint refuses a service key (403)", live.status === 403 && /sample report only/.test(live.text)]);

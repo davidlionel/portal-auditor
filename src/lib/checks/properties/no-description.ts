@@ -28,6 +28,7 @@ export function checkNoDescription(
       affected: missing.length,
       population: noDescriptionPopulation(props),
       samples: missing.slice(0, config.sampleCap).map((p) => p.name),
+      items: missing.slice(0, config.records.workListCap).map((p) => p.name),
       why: "Without a description, users guess what a field means and fill it inconsistently.",
       fix: "Add a one-line description to each property saying what it holds and who fills it.",
     },

@@ -28,6 +28,8 @@ describe("validateSnapshot", () => {
   it("accepts a real report: IDs, property names, counts and portal details", () => {
     assert.deepEqual(validateSnapshot(clean), []);
     assert.ok(clean.report.findings.some((f) => f.records?.length), "fixture has work lists");
+    assert.ok(clean.report.findings.some((f) => f.items?.length), "fixture has full property lists");
+    assert.ok(!Number.isNaN(Date.parse(clean.report.scannedAt)), "report has a scan date");
     assert.ok(clean.report.findings.some((f) => f.samples.length), "fixture has property samples");
   });
 
@@ -90,6 +92,14 @@ describe("prepareDemo", () => {
     assert.ok(demo.ok);
     assert.deepEqual(demo.report.score, scoreChecks(clean.report.checks));
     assert.equal(demo.scannedAt, clean.scannedAt);
+  });
+
+  it("gives snapshots saved before reports had a scan date the snapshot's date", () => {
+    const s = copy();
+    delete (s.report as Partial<typeof s.report>).scannedAt;
+    const demo = prepareDemo(s);
+    assert.ok(demo.ok);
+    assert.equal(demo.report.scannedAt, clean.scannedAt);
   });
 
   it("refuses to show a snapshot that fails the safety check", () => {

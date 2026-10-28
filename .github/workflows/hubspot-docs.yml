@@ -1,0 +1,48 @@
+# Weekly check that every HubSpot page the cleanup playbook cites still
+# loads without a redirect and still contains its key phrases. Failures are
+# reported in one GitHub issue (labelled hubspot-docs); a run never fails
+# because a page changed, and nothing here affects deploys.
+name: HubSpot docs check
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Always exits 0; writes docs-report.md only when something failed.
+      - run: npm run check:hubspot-docs -- --report docs-report.md
+
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -s docs-report.md ]; then
+            echo "Every HubSpot page passed."
+            exit 0
+          fi
+          gh label create hubspot-docs --color BFD4F2 \
+            --description "A HubSpot page cited by the playbook changed" 2>/dev/null || true
+          existing=$(gh issue list --label hubspot-docs --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file docs-report.md
+          else
+            gh issue create --label hubspot-docs \
+              --title "HubSpot docs changed: review the playbook guidance" \
+              --body-file docs-report.md
+          fi
