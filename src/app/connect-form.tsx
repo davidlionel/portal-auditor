@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ProgressEvent } from "@/lib/progress";
 import type { ScanReport } from "@/lib/scan";
 import type { ScanStreamEvent } from "@/lib/scan-stream";
@@ -17,8 +17,17 @@ type ScanState =
 
 // Both flags are decided on the server. `liveScan` shows the key field;
 // `simulatorAvailable` shows the dev-only simulated scan, whose code never
-// reaches the browser: the button only asks the server to run it.
-export function ConnectForm({ liveScan, simulatorAvailable }: { liveScan: boolean; simulatorAvailable: boolean }) {
+// reaches the browser: the button only asks the server to run it. `children`
+// go at the bottom of the form card, under the key field.
+export function ConnectForm({
+  liveScan,
+  simulatorAvailable,
+  children,
+}: {
+  liveScan: boolean;
+  simulatorAvailable: boolean;
+  children?: ReactNode;
+}) {
   const [state, setState] = useState<ScanState>({ status: "idle" });
   // Set when a scan starts; reading the clock during render breaks prerendering.
   const [now, setNow] = useState(0);
@@ -132,6 +141,7 @@ export function ConnectForm({ liveScan, simulatorAvailable }: { liveScan: boolea
             <span className={styles.note}>Dev only: fake portal, no HubSpot calls.</span>
           </div>
         )}
+        {children}
       </form>
 
       {state.status === "running" && (

@@ -17,9 +17,11 @@ function download(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-// recordLinks is false on the public sample, whose links would only lead
-// to a HubSpot login.
-export function ExportButtons({ report, recordLinks = true }: { report: ScanReport; recordLinks?: boolean }) {
+// `sample` marks the public sample report: its work lists leave the link
+// column blank, since the links would only lead to a HubSpot login, and the
+// note says so. Real scans never show that sentence.
+export function ExportButtons({ report, sample = false }: { report: ScanReport; sample?: boolean }) {
+  const recordLinks = !sample;
   const prefix = `portal-${report.portal.portalId}`;
   return (
     <div className={styles.card}>
@@ -46,7 +48,7 @@ export function ExportButtons({ report, recordLinks = true }: { report: ScanRepo
       <p className={`${styles.note} ${styles.exportNote}`}>
         Files are built in your browser from this report; nothing is stored. Work lists hold
         record IDs and HubSpot links only, one file per object, ready to import by Record ID.
-        {!recordLinks && " In the sample, the link column is left blank."}
+        {sample && " In the sample, the link column is left blank."}
       </p>
     </div>
   );

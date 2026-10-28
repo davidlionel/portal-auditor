@@ -207,7 +207,7 @@ export function Report({ report, demo }: { report: ScanReport; demo?: DemoInfo }
     <section className={styles.report} aria-live="polite">
       <ScoreCard report={report} demo={demo} />
       <TopFixes report={report} />
-      <ExportButtons report={report} recordLinks={!demo} />
+      <ExportButtons report={report} sample={Boolean(demo)} />
 
       <div className={styles.card}>
         <h2>Scan details</h2>

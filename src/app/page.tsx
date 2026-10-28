@@ -6,7 +6,47 @@ import { ConnectForm } from "./connect-form";
 import styles from "./page.module.css";
 
 const RUN_LOCALLY_URL = "https://github.com/davidlionel/portal-auditor#run-it-on-your-own-portal";
-const SCOPES_URL = "https://github.com/davidlionel/portal-auditor#scopes-to-tick-on-the-service-key";
+const PITCH = "A health check for HubSpot portals: a score out of 100 and the five fixes that matter most.";
+
+// Same scopes as the README's "Scopes to tick on the service key".
+const SCOPES = [
+  {
+    names: ["crm.schemas.contacts.read", "crm.schemas.companies.read", "crm.schemas.deals.read"],
+    why: "Read property definitions (labels, descriptions, dropdown options) for the property checks.",
+  },
+  {
+    names: ["crm.objects.contacts.read", "crm.objects.companies.read", "crm.objects.deals.read"],
+    why: "Count records for fill rates and record checks, and read name, company, email and domain on recent records for the duplicate and email checks.",
+  },
+];
+
+function ScopesHelp() {
+  return (
+    <details className={styles.samples}>
+      <summary>Which scopes does my key need?</summary>
+      <p className={`${styles.note} ${styles.scopesIntro}`}>
+        Create the key in HubSpot under <strong>Development &gt; Keys &gt; Service keys</strong> and
+        tick these six read-only scopes. If one is missing, the scan skips that check and says so.
+      </p>
+      <ul className={styles.scopes}>
+        {SCOPES.map((scope) => (
+          <li key={scope.names[0]}>
+            {scope.names.map((name) => (
+              <code key={name} className={styles.scopeName}>
+                {name}
+              </code>
+            ))}
+            <span className={styles.note}>{scope.why}</span>
+          </li>
+        ))}
+        <li>
+          <span className={styles.scopeName}>No scope needed</span>
+          <span className={styles.note}>Account details, to confirm which portal is connected.</span>
+        </li>
+      </ul>
+    </details>
+  );
+}
 
 export default function Home() {
   // Decided on the server: on locally, off on Vercel, so the public demo never
@@ -14,13 +54,31 @@ export default function Home() {
   // build time; /api/scan checks it again on every request.
   const liveScan = liveScanEnabled();
   const simulator = simulatorEnabled();
+
+  if (liveScan) {
+    return (
+      <main className={styles.main}>
+        <header className={styles.header}>
+          <h1>Portal Health Auditor</h1>
+          <p className={styles.pitch}>{PITCH}</p>
+        </header>
+        <ConnectForm liveScan simulatorAvailable={simulator}>
+          <ScopesHelp />
+          <p className={styles.note}>
+            <Link className={styles.recordLink} href="/demo">
+              See a sample report
+            </Link>
+          </p>
+        </ConnectForm>
+      </main>
+    );
+  }
+
   return (
     <main className={styles.main}>
       <header className={styles.header}>
         <h1>Portal Health Auditor</h1>
-        <p className={styles.pitch}>
-          A health check for HubSpot portals: a score out of 100 and the five fixes that matter most.
-        </p>
+        <p className={styles.pitch}>{PITCH}</p>
       </header>
 
       <section className={styles.card}>
@@ -57,25 +115,14 @@ export default function Home() {
             View sample report
           </Link>
         </div>
-        {!liveScan && (
-          <p className={`${styles.note} ${styles.exportNote}`}>
-            This site shows the sample only and never asks for a service key. To scan your own
-            portal, <a className={styles.recordLink} href={RUN_LOCALLY_URL}>run it on your machine</a>;
-            it takes a few minutes to set up.
-          </p>
-        )}
+        <p className={`${styles.note} ${styles.exportNote}`}>
+          This site shows the sample only and never asks for a service key. To scan your own
+          portal, <a className={styles.recordLink} href={RUN_LOCALLY_URL}>run it on your machine</a>;
+          it takes a few minutes to set up.
+        </p>
       </section>
 
-      {liveScan && (
-        <p className={styles.note}>
-          The key needs six read-only scopes:{" "}
-          <a className={styles.recordLink} href={SCOPES_URL}>
-            see which and why
-          </a>
-          .
-        </p>
-      )}
-      {(liveScan || simulator) && <ConnectForm liveScan={liveScan} simulatorAvailable={simulator} />}
+      {simulator && <ConnectForm liveScan={false} simulatorAvailable />}
     </main>
   );
 }
