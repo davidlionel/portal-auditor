@@ -1,6 +1,20 @@
+export type ChecksConfig = {
+  sampleCap: number;
+  searchMinIntervalMs: number;
+  fillRate: {
+    nearZeroThreshold: number;
+    minAgeDays: number;
+  };
+  duplicateLabels: {
+    nearMinLength: number;
+    nearMaxDistance: number;
+  };
+};
+
 // Thresholds for the audit checks. The reasoning for each value lives in
-// the project's decision log, not here.
-export const CHECKS_CONFIG = {
+// the project's decision log, not here. Checks take this as a default, so
+// tests can pass their own config without changing the real rules.
+export const CHECKS_CONFIG: ChecksConfig = {
   sampleCap: 10,
   searchMinIntervalMs: 250,
   fillRate: {
@@ -14,4 +28,4 @@ export const CHECKS_CONFIG = {
     nearMinLength: 8,
     nearMaxDistance: 2,
   },
-} as const;
+};

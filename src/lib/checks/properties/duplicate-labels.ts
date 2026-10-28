@@ -1,13 +1,17 @@
-import { CHECKS_CONFIG } from "@/config/checks";
+import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import { isCustom, type ObjectType, type PropertyDef } from "@/lib/hubspot/properties";
 import { differOnlyInDigits, levenshtein, normalizeLabel } from "@/lib/text";
 import type { Finding } from "../types";
 
 const describe = (p: PropertyDef) => `${p.name} ("${p.label}")`;
 
-export function checkDuplicateLabels(objectType: ObjectType, props: PropertyDef[]): Finding[] {
+export function checkDuplicateLabels(
+  objectType: ObjectType,
+  props: PropertyDef[],
+  config: ChecksConfig = CHECKS_CONFIG,
+): Finding[] {
   const live = props.filter((p) => !p.archived);
-  const { nearMinLength, nearMaxDistance } = CHECKS_CONFIG.duplicateLabels;
+  const { nearMinLength, nearMaxDistance } = config.duplicateLabels;
 
   // Exact duplicates: same label once case, spacing and punctuation are ignored.
   const byNormalized = new Map<string, PropertyDef[]>();
@@ -45,7 +49,7 @@ export function checkDuplicateLabels(objectType: ObjectType, props: PropertyDef[
       severity: "medium",
       count: exactGroups.length,
       samples: exactGroups
-        .slice(0, CHECKS_CONFIG.sampleCap)
+        .slice(0, config.sampleCap)
         .map((group) => group.map(describe).join(" / ")),
       why: "Users can't tell which field to use, so data splits across both and reports undercount.",
       fix: "Pick one property to keep, migrate values from the other, then archive the duplicate.",
@@ -60,7 +64,7 @@ export function checkDuplicateLabels(objectType: ObjectType, props: PropertyDef[
       severity: "medium",
       count: nearPairs.length,
       samples: nearPairs
-        .slice(0, CHECKS_CONFIG.sampleCap)
+        .slice(0, config.sampleCap)
         .map(([a, b]) => `${describe(a)} / ${describe(b)}`),
       why: "Labels a typo apart are usually the same field created twice, which splits data between them.",
       fix: "Check whether each pair means the same thing; if so, merge into one property and archive the other.",

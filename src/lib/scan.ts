@@ -1,4 +1,4 @@
-import { CHECKS_CONFIG } from "@/config/checks";
+import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import { checkDropdownVariants } from "./checks/properties/dropdown-variants";
 import { checkDuplicateLabels } from "./checks/properties/duplicate-labels";
 import { checkFillRate, fillRateCandidates } from "./checks/properties/fill-rate";
@@ -43,11 +43,14 @@ function problemNote(kind: HubSpotErrorKind, scope: string): string {
     : `HubSpot returned an error (${kind.replace("_", " ")})`;
 }
 
-export async function runPropertiesScan(token: string): Promise<ScanResult> {
+export async function runPropertiesScan(
+  token: string,
+  config: ChecksConfig = CHECKS_CONFIG,
+): Promise<ScanResult> {
   const started = performance.now();
   const client = makeClient(token);
   const counter: CallCounter = { calls: 0 };
-  const pace = createPacer(CHECKS_CONFIG.searchMinIntervalMs);
+  const pace = createPacer(config.searchMinIntervalMs);
 
   const account = await getAccountDetails(client, counter);
   if (!account.ok) return { ok: false, kind: account.kind };
@@ -70,9 +73,9 @@ export async function runPropertiesScan(token: string): Promise<ScanResult> {
     scannedObjects.push(objectType);
 
     findings.push(
-      ...checkNoDescription(objectType, props.data),
-      ...checkDuplicateLabels(objectType, props.data),
-      ...checkDropdownVariants(objectType, props.data),
+      ...checkNoDescription(objectType, props.data, config),
+      ...checkDuplicateLabels(objectType, props.data, config),
+      ...checkDropdownVariants(objectType, props.data, config),
     );
 
     // Fill rate needs record counts, which use a different scope.
@@ -89,7 +92,7 @@ export async function runPropertiesScan(token: string): Promise<ScanResult> {
       continue;
     }
 
-    const candidates = fillRateCandidates(props.data);
+    const candidates = fillRateCandidates(props.data, Date.now(), config);
     const filled = new Map<string, number>();
     let failed = 0;
     for (const p of candidates) {
@@ -101,7 +104,7 @@ export async function runPropertiesScan(token: string): Promise<ScanResult> {
     if (failed) {
       notes.push(`${label}: couldn't measure fill rate for ${failed} of ${candidates.length} properties.`);
     }
-    findings.push(...checkFillRate(objectType, candidates, filled, total.data));
+    findings.push(...checkFillRate(objectType, candidates, filled, total.data, config));
   }
 
   findings.sort(

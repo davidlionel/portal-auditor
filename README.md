@@ -22,6 +22,14 @@ npm run dev
 
 Open http://localhost:3000 and paste a service key from a HubSpot **developer test portal**. Don't use real client data.
 
+## Tests
+
+```bash
+npm test
+```
+
+Unit tests run each property check against hand-built fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses.
+
 ## Why a service key
 
 HubSpot recommends service keys for single-account API access, and legacy private apps no longer get new scopes or features. Create one in HubSpot under **Development > Keys > Service keys** and tick only the scopes in the table below. Service keys work for REST API calls only, which is all this app makes.

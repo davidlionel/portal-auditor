@@ -1,4 +1,4 @@
-import { CHECKS_CONFIG } from "@/config/checks";
+import { CHECKS_CONFIG, type ChecksConfig } from "@/config/checks";
 import { isCustom, type ObjectType, type PropertyDef } from "@/lib/hubspot/properties";
 import { normalizeLabel } from "@/lib/text";
 import type { Finding } from "../types";
@@ -22,7 +22,11 @@ function isPluralPair(a: string, b: string): boolean {
 
 // Custom properties only: HubSpot-defined option lists (hs_language,
 // hs_timezone and so on) aren't something admins can fix.
-export function checkDropdownVariants(objectType: ObjectType, props: PropertyDef[]): Finding[] {
+export function checkDropdownVariants(
+  objectType: ObjectType,
+  props: PropertyDef[],
+  config: ChecksConfig = CHECKS_CONFIG,
+): Finding[] {
   const definite: string[] = [];
   const possible: string[] = [];
 
@@ -60,7 +64,7 @@ export function checkDropdownVariants(objectType: ObjectType, props: PropertyDef
       objectType,
       severity: "high",
       count: definite.length,
-      samples: definite.slice(0, CHECKS_CONFIG.sampleCap),
+      samples: definite.slice(0, config.sampleCap),
       why: "Records split across variants like Webinar / webinar, so segments, workflows and reports miss some of them.",
       fix: "Keep one option, bulk-update records from the others to it, then delete the extra options.",
     });
@@ -73,7 +77,7 @@ export function checkDropdownVariants(objectType: ObjectType, props: PropertyDef
       objectType,
       severity: "medium",
       count: possible.length,
-      samples: possible.slice(0, CHECKS_CONFIG.sampleCap),
+      samples: possible.slice(0, config.sampleCap),
       why: "Singular and plural options usually mean the same value, so records split between them.",
       fix: "Review each pair; if they mean the same thing, merge records into one option and delete the other.",
     });
