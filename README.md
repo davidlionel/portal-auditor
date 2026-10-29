@@ -86,7 +86,7 @@ After a scan, and on the sample report, **Download playbook (PDF)** gives a step
 
 ### Where the HubSpot steps come from
 
-Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (correcting mistyped emails, reviewing stale deals with their owners, owners confirming possible duplicates) is marked `general` and labelled "General guidance" in the PDF.
+Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (correcting mistyped emails, finding missing emails before deleting contacts, reviewing stale deals with their owners, owners confirming possible duplicates) is marked `general` and labelled "General guidance" in the PDF.
 
 - `npm run check:hubspot-docs` fetches every source page, fails any that redirect, return an error or no longer contain their key phrases, and always exits 0.
 - A weekly GitHub Action (`.github/workflows/hubspot-docs.yml`, Mondays, or run it from the Actions tab) runs the same check and opens one issue labelled `hubspot-docs` listing anything that failed, or comments on the open one. It never fails a build or a deploy.

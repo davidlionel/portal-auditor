@@ -34,6 +34,7 @@ const PIPELINES = `${KB}/object-settings/set-up-and-customize-pipelines`;
 const IMPORT = `${KB}/import-and-export/import-records-for-a-single-object`;
 const FIELD_TYPES = `${KB}/properties/property-field-types-in-hubspot`;
 const MERGE = `${KB}/records/merge-records`;
+const LIFECYCLE = `${KB}/records/use-lifecycle-stages`;
 
 export const GUIDANCE = {
   // Finding records on an index page.
@@ -85,6 +86,26 @@ export const GUIDANCE = {
     text: "To delete records nobody needs, select them, click Delete, enter the number of records and click Delete. This needs the Bulk delete permission.",
     source: BULK,
     keyPhrases: ["enter the number of records and click Delete", "Bulk delete permission"],
+    lastVerified: "2026-10-28",
+  },
+  deleteContactsLastResort: {
+    text: "Delete only as a last resort, for contacts whose email can't be found and that nobody needs: select them, click Delete, enter the number of records and click Delete. This needs the Bulk delete permission.",
+    source: BULK,
+    keyPhrases: ["enter the number of records and click Delete", "Bulk delete permission"],
+    lastVerified: "2026-10-28",
+  },
+  findMissingEmail: {
+    text: "Before deleting anything, look for each contact's email in the system it came from (the form, import file or integration that created it), or ask the contact's owner, and add it to the record.",
+    general: true,
+    lastVerified: "2026-10-28",
+  },
+  lifecycleBackward: {
+    text: "If a contact isn't really a customer, move it to an earlier stage. HubSpot tools only move Lifecycle stage forward, so clear the value first, by hand on the record or with a workflow, then set the earlier stage. HubSpot's docs don't say whether bulk edit (select, then Edit) can move a stage backward, so after a bulk update, open a few records to check the stage changed.",
+    source: LIFECYCLE,
+    keyPhrases: [
+      "can only be moved forward by HubSpot tools",
+      "You must clear the value manually or via a workflow before using these tools to set an earlier value",
+    ],
     lastVerified: "2026-10-28",
   },
   associateContacts: {
@@ -145,8 +166,13 @@ export const GUIDANCE = {
     keyPhrases: ["contains any of: for Text properties, enter your text"],
     lastVerified: "2026-10-28",
   },
-  confirmWithOwner: {
-    text: "Each owner opens the records in a group and decides whether they are the same person or company. If they are, merge them (next step). If not, clear their Cleanup reason so they drop out of the view.",
+  confirmContactWithOwner: {
+    text: "Each owner opens the records in a group and decides whether they are the same person. If they are, merge them (next step). If not, clear their Cleanup reason so they drop out of the view.",
+    general: true,
+    lastVerified: "2026-10-28",
+  },
+  confirmCompanyWithOwner: {
+    text: "Each owner opens the records in a group and decides whether they are the same company. If they are, merge them (next step). If not, clear their Cleanup reason so they drop out of the view.",
     general: true,
     lastVerified: "2026-10-28",
   },
@@ -386,12 +412,12 @@ export const CHECK_GUIDES: Record<string, CheckGuide> = {
       { property: "recentDealCloseDate", operator: "isUnknown" },
     ],
     csv: "none",
-    steps: ["openIndex", "advancedFilters", "saveView", "associateDeal", "bulkEdit"],
+    steps: ["openIndex", "advancedFilters", "saveView", "associateDeal", "lifecycleBackward"],
   },
   "contacts.missing-email": {
     filter: [{ property: "email", operator: "isUnknown" }],
     csv: "none",
-    steps: ["openIndex", "advancedFilters", "saveView", "bulkDelete"],
+    steps: ["openIndex", "advancedFilters", "saveView", "findMissingEmail", "deleteContactsLastResort"],
   },
   "contacts.malformed-email": {
     csv: "import",
@@ -407,10 +433,10 @@ export const CHECK_GUIDES: Record<string, CheckGuide> = {
     steps: ["duplicatesTool", "duplicatesPlan", "mergeRecords", "mergeFromRecord"],
   },
   // Medium and Low: each owner confirms before anything is merged.
-  "contacts.duplicates-medium": { csv: "import", steps: ["openIndex", "duplicateReviewView", "contactOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
-  "contacts.duplicates-low": { csv: "import", steps: ["openIndex", "duplicateReviewView", "contactOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
-  "companies.duplicates-medium": { csv: "import", steps: ["openIndex", "duplicateReviewView", "companyOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
-  "companies.duplicates-low": { csv: "import", steps: ["openIndex", "duplicateReviewView", "companyOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
+  "contacts.duplicates-medium": { csv: "import", steps: ["openIndex", "duplicateReviewView", "contactOwnerFilter", "saveView", "confirmContactWithOwner", "mergeFromRecord"] },
+  "contacts.duplicates-low": { csv: "import", steps: ["openIndex", "duplicateReviewView", "contactOwnerFilter", "saveView", "confirmContactWithOwner", "mergeFromRecord"] },
+  "companies.duplicates-medium": { csv: "import", steps: ["openIndex", "duplicateReviewView", "companyOwnerFilter", "saveView", "confirmCompanyWithOwner", "mergeFromRecord"] },
+  "companies.duplicates-low": { csv: "import", steps: ["openIndex", "duplicateReviewView", "companyOwnerFilter", "saveView", "confirmCompanyWithOwner", "mergeFromRecord"] },
   "companies.no-contacts": {
     filter: [{ property: "numberOfAssociatedContacts", operator: "isEqualTo", value: "0" }],
     csv: "none",

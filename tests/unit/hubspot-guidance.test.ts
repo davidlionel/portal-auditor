@@ -79,6 +79,26 @@ describe("HubSpot guidance file", () => {
     }
     assert.ok(IMPORT_STEPS.length > 0);
   });
+
+  it("words each fix for its object and puts deleting last", () => {
+    const text = (checkId: string) => CHECK_GUIDES[checkId].steps.map((step) => GUIDANCE[step as keyof typeof GUIDANCE].text);
+    for (const tier of ["medium", "low"]) {
+      const contacts = text(`contacts.duplicates-${tier}`).join(" ");
+      const companies = text(`companies.duplicates-${tier}`).join(" ");
+      assert.match(contacts, /the same person\./);
+      assert.doesNotMatch(contacts, /company\./);
+      assert.match(companies, /the same company\./);
+      assert.doesNotMatch(companies, /person/);
+    }
+
+    const steps = CHECK_GUIDES["contacts.missing-email"].steps;
+    assert.ok(steps.indexOf("findMissingEmail") >= 0 && steps.indexOf("findMissingEmail") < steps.indexOf("deleteContactsLastResort"));
+    assert.equal(steps.at(-1), "deleteContactsLastResort");
+    assert.match(GUIDANCE.deleteContactsLastResort.text, /last resort/);
+
+    assert.ok(CHECK_GUIDES["contacts.customer-without-won-deal"].steps.includes("lifecycleBackward"));
+    assert.match(GUIDANCE.lifecycleBackward.text, /clear the value first/);
+  });
 });
 
 describe("docs page text", () => {
