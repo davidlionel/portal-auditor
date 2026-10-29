@@ -19,7 +19,7 @@ let ordered: Finding[];
 before(async () => {
   ({ report, recordValues } = await simulatedReport());
   playbook = buildPlaybook(report);
-  ordered = topFixes(report.findings, report.score, { ...SCORING_CONFIG, topFixes: Infinity }).map((t) => t.finding);
+  ordered = topFixes(report.findings, report.score, { ...SCORING_CONFIG, topFixes: Infinity }, { includeUnscored: true }).map((t) => t.finding);
 });
 
 // Every string anywhere in a value.
@@ -165,7 +165,8 @@ describe("buildPlaybook: appendix", () => {
     for (const file of playbook.files) {
       const note = file.columns.find((c) => c.name === "Cleanup reason")?.note;
       if (!note) continue;
-      const example = note.match(/e\.g\. "Portal audit \d{4}-\d{2}-\d{2}: ([^"]+)"/)?.[1];
+      // Duplicate files end the reason with the group number.
+      const example = note.match(/e\.g\. "Portal audit \d{4}-\d{2}-\d{2}: ([^"]+?)(?:, group \d+)?"/)?.[1];
       assert.ok(example, `${file.path}: no example`);
       const finding = report.findings.find((f) => f.title === example);
       assert.ok(finding, `${file.path}: "${example}" isn't a finding`);

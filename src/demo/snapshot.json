@@ -1,8 +1,8 @@
 {
-  "scannedAt": "2026-10-28T19:48:26.311Z",
+  "scannedAt": "2026-10-29T01:34:11.502Z",
   "appVersion": "0.1.0",
   "report": {
-    "scannedAt": "2026-10-28T19:48:26.307Z",
+    "scannedAt": "2026-10-29T01:34:11.498Z",
     "portal": {
       "portalId": 247313672,
       "accountType": "DEVELOPER_TEST",
@@ -17,8 +17,8 @@
       "deals"
     ],
     "notes": [
-      "Contacts duplicate and email checks covered all 222 contacts. HubSpot's own duplicate tool scans the whole portal: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
-      "Companies duplicate checks covered all 139 companies. HubSpot's own duplicate tool scans the whole portal: CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)."
+      "Companies duplicate checks covered all 139 companies. On Professional and Enterprise plans, HubSpot's Manage duplicates tool checks the whole portal: CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
+      "Contacts duplicate and email checks covered all 222 contacts. On Professional and Enterprise plans, HubSpot's Manage duplicates tool checks the whole portal: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)."
     ],
     "findings": [
       {
@@ -75,13 +75,11 @@
         "fix": "Make Amount required at the deal stages where it's known, then fill it in on these deals."
       },
       {
-        "checkId": "companies.duplicate-domain",
-        "title": "Companies sharing the same domain",
+        "checkId": "companies.duplicates-high",
+        "title": "Likely duplicate companies (high confidence)",
         "severity": "high",
         "category": "Companies",
         "objectType": "companies",
-        "why": "Contacts and deals get split across copies of the same company, so account views and revenue roll-ups are incomplete.",
-        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
         "count": 3,
         "affected": 10,
         "population": 139,
@@ -95,97 +93,129 @@
             "351885432557"
           ],
           [
-            "357202860749",
-            "357246073533"
-          ],
-          [
             "357238874860",
             "357528543960"
+          ],
+          [
+            "357202860749",
+            "357246073533"
           ]
         ],
         "records": [
           {
             "id": "351889741521",
-            "group": 1
+            "group": 1,
+            "signals": "same domain"
           },
           {
             "id": "351885541079",
-            "group": 1
+            "group": 1,
+            "signals": "same domain"
           },
           {
             "id": "351853800165",
-            "group": 1
+            "group": 1,
+            "signals": "same domain"
           },
           {
             "id": "351889490670",
-            "group": 1
+            "group": 1,
+            "signals": "same domain"
           },
           {
             "id": "351885432557",
-            "group": 1
+            "group": 1,
+            "signals": "same domain"
           },
           {
             "id": "351883204339",
-            "group": 1
-          },
-          {
-            "id": "357202860749",
-            "group": 2
-          },
-          {
-            "id": "357246073533",
-            "group": 2
+            "group": 1,
+            "signals": "same domain"
           },
           {
             "id": "357238874860",
-            "group": 3
+            "group": 2,
+            "signals": "same domain"
           },
           {
             "id": "357528543960",
-            "group": 3
+            "group": 2,
+            "signals": "same domain"
+          },
+          {
+            "id": "357202860749",
+            "group": 3,
+            "signals": "same domain"
+          },
+          {
+            "id": "357246073533",
+            "group": 3,
+            "signals": "same domain"
           }
-        ]
+        ],
+        "matchSummary": [
+          {
+            "signals": "same domain",
+            "groups": 3
+          }
+        ],
+        "why": "Contacts and deals get split across copies of the same company, so account views and revenue roll-ups are incomplete.",
+        "fix": "Review and merge them in HubSpot's duplicate tool (Professional and Enterprise plans): CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Each group in the export says why it matched. Merges can't be undone, so check each pair first."
       },
       {
-        "checkId": "contacts.duplicate-name-company",
-        "title": "Likely duplicate contacts (same name and company)",
+        "checkId": "contacts.duplicates-high",
+        "title": "Likely duplicate contacts (high confidence)",
         "severity": "high",
         "category": "Contacts",
         "objectType": "contacts",
-        "why": "Duplicates split activity history between records, so owners miss context and reports double-count people.",
-        "fix": "Review and merge them in HubSpot's duplicate tool: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Merges can't be undone, so check each pair first.",
         "count": 2,
         "affected": 4,
         "population": 222,
         "samples": [],
         "recordSamples": [
           [
-            "578831438551",
-            "578829614799"
-          ],
-          [
             "579380759253",
             "579467783923"
+          ],
+          [
+            "578831438551",
+            "578829614799"
           ]
         ],
         "records": [
           {
-            "id": "578831438551",
-            "group": 1
-          },
-          {
-            "id": "578829614799",
-            "group": 1
-          },
-          {
             "id": "579380759253",
-            "group": 2
+            "group": 1,
+            "signals": "same company name + same email domain + same company domain + same name"
           },
           {
             "id": "579467783923",
-            "group": 2
+            "group": 1,
+            "signals": "same company name + same email domain + same company domain + same name"
+          },
+          {
+            "id": "578831438551",
+            "group": 2,
+            "signals": "same company name + same email domain + same company record + same name"
+          },
+          {
+            "id": "578829614799",
+            "group": 2,
+            "signals": "same company name + same email domain + same company record + same name"
           }
-        ]
+        ],
+        "matchSummary": [
+          {
+            "signals": "same company name + same email domain + same company domain + same name",
+            "groups": 1
+          },
+          {
+            "signals": "same company name + same email domain + same company record + same name",
+            "groups": 1
+          }
+        ],
+        "why": "Duplicates split activity history between records, so owners miss context and reports double-count people.",
+        "fix": "Review and merge them in HubSpot's duplicate tool (Professional and Enterprise plans): CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates). Each group in the export says why it matched. Merges can't be undone, so check each pair first."
       },
       {
         "checkId": "properties.dropdown-variants",
@@ -1275,6 +1305,44 @@
         "fix": "Confirm nobody relies on each one, then archive it or start populating it through a form or workflow."
       },
       {
+        "checkId": "companies.duplicates-medium",
+        "title": "Possible duplicate companies (medium confidence)",
+        "severity": "medium",
+        "scored": false,
+        "category": "Companies",
+        "objectType": "companies",
+        "count": 1,
+        "affected": 2,
+        "population": 139,
+        "samples": [],
+        "recordSamples": [
+          [
+            "357233456849",
+            "357233456848"
+          ]
+        ],
+        "records": [
+          {
+            "id": "357233456849",
+            "group": 1,
+            "signals": "same root domain"
+          },
+          {
+            "id": "357233456848",
+            "group": 1,
+            "signals": "same root domain"
+          }
+        ],
+        "matchSummary": [
+          {
+            "signals": "same root domain",
+            "groups": 1
+          }
+        ],
+        "why": "Contacts and deals get split across copies of the same company, so account views and revenue roll-ups are incomplete.",
+        "fix": "Not scored: these share some details but not enough to be sure. Ask each record's owner to confirm, then merge the real duplicates. Each group in the export says why it matched."
+      },
+      {
         "checkId": "companies.no-contacts",
         "title": "Companies with no associated contacts",
         "severity": "low",
@@ -1567,26 +1635,6 @@
         "population": 222
       },
       {
-        "checkId": "contacts.duplicate-name-company",
-        "title": "Likely duplicate contacts (same name and company)",
-        "severity": "high",
-        "category": "Contacts",
-        "objectType": "contacts",
-        "status": "scored",
-        "affected": 4,
-        "population": 222
-      },
-      {
-        "checkId": "contacts.malformed-email",
-        "title": "Contacts with a malformed or mistyped email",
-        "severity": "medium",
-        "category": "Contacts",
-        "objectType": "contacts",
-        "status": "scored",
-        "affected": 2,
-        "population": 222
-      },
-      {
         "checkId": "properties.no-description",
         "title": "Custom properties with no description",
         "severity": "low",
@@ -1657,13 +1705,35 @@
         "population": 139
       },
       {
-        "checkId": "companies.duplicate-domain",
-        "title": "Companies sharing the same domain",
+        "checkId": "companies.duplicates-high",
+        "title": "Likely duplicate companies (high confidence)",
         "severity": "high",
         "category": "Companies",
         "objectType": "companies",
         "status": "scored",
         "affected": 10,
+        "population": 139
+      },
+      {
+        "checkId": "companies.duplicates-medium",
+        "title": "Possible duplicate companies (medium confidence)",
+        "severity": "medium",
+        "scored": false,
+        "category": "Companies",
+        "objectType": "companies",
+        "status": "unscored",
+        "affected": 2,
+        "population": 139
+      },
+      {
+        "checkId": "companies.duplicates-low",
+        "title": "Possible duplicate companies (low confidence)",
+        "severity": "low",
+        "scored": false,
+        "category": "Companies",
+        "objectType": "companies",
+        "status": "unscored",
+        "affected": 0,
         "population": 139
       },
       {
@@ -1755,6 +1825,48 @@
         "status": "scored",
         "affected": 154,
         "population": 158
+      },
+      {
+        "checkId": "contacts.duplicates-high",
+        "title": "Likely duplicate contacts (high confidence)",
+        "severity": "high",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 4,
+        "population": 222
+      },
+      {
+        "checkId": "contacts.duplicates-medium",
+        "title": "Possible duplicate contacts (medium confidence)",
+        "severity": "medium",
+        "scored": false,
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "unscored",
+        "affected": 0,
+        "population": 222
+      },
+      {
+        "checkId": "contacts.duplicates-low",
+        "title": "Possible duplicate contacts (low confidence)",
+        "severity": "low",
+        "scored": false,
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "unscored",
+        "affected": 0,
+        "population": 222
+      },
+      {
+        "checkId": "contacts.malformed-email",
+        "title": "Contacts with a malformed or mistyped email",
+        "severity": "medium",
+        "category": "Contacts",
+        "objectType": "contacts",
+        "status": "scored",
+        "affected": 2,
+        "population": 222
       }
     ],
     "score": {
@@ -1793,21 +1905,21 @@
         "contacts.missing-lifecycle-stage:contacts": 0.344,
         "contacts.customer-without-won-deal:contacts": 6.364,
         "contacts.missing-email:contacts": 1.261,
-        "contacts.duplicate-name-company:contacts": 1.72,
-        "contacts.malformed-email:contacts": 0.229,
         "properties.no-description:companies": 0.556,
         "companies.no-contacts:companies": 1.511,
-        "companies.duplicate-domain:companies": 10.791,
+        "companies.duplicates-high:companies": 10.791,
         "properties.no-description:deals": 0.556,
         "deals.missing-amount:deals": 2.338,
         "deals.missing-close-date:deals": 7.143,
-        "deals.stale:deals": 7.143
+        "deals.stale:deals": 7.143,
+        "contacts.duplicates-high:contacts": 1.72,
+        "contacts.malformed-email:contacts": 0.229
       },
       "explanation": "Each check loses points in proportion to the share of records or properties it flags, reaching zero at 10% (high), 25% (medium) or 50% (low); categories average their checks weighted 3:2:1 by severity, and the total weights Contacts 35, Deals 25, Companies 20, Properties 20. Skipped checks don't count."
     },
     "apiCalls": 30,
     "retries": 0,
-    "durationMs": 8346,
+    "durationMs": 8532,
     "simulated": false
   }
 }

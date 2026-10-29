@@ -34,6 +34,8 @@ export type Section = {
   severity: Severity;
   rate: string;
   points: number;
+  // False for duplicates still to confirm: reported, not scored.
+  scored: boolean;
   why: string;
   summary: string;
   // "Lifecycle stage is unknown", one line per condition.
@@ -117,6 +119,17 @@ function csvText(report: ScanReport, finding: Finding, files: ExportFile[]): str
   if (!files.some((f) => f.path === path)) return "No records to import.";
   const listed = new Set(finding.records?.map((r) => r.id)).size;
   const capped = (finding.records?.length ?? 0) < finding.affected ? ` It lists the first ${listed.toLocaleString("en-US")} of ${finding.affected.toLocaleString("en-US")} affected records.` : "";
+  const first = finding.records?.[0];
+  if (first?.group) {
+    const groups = new Set(finding.records!.map((r) => r.group)).size;
+    // Owners review medium and low groups from a view on the Cleanup reason
+    // property; high groups can go into a contact segment like other files.
+    const target =
+      finding.scored === false || finding.objectType !== "contacts"
+        ? "map the Cleanup reason column to a new Cleanup reason property"
+        : "select Create a contact segment, or map the Cleanup reason column to a new Cleanup reason property to see the groups";
+    return `Use ${path} (${listed.toLocaleString("en-US")} records in ${groups.toLocaleString("en-US")} ${groups === 1 ? "group" : "groups"}).${capped} Import it by Record ID as in Appendix B and ${target}. Each row's Cleanup reason ends with its group number, e.g. "${cleanupReason(report, finding, first)}", and the Match signals column says why the group matched.`;
+  }
   const target =
     finding.objectType === "contacts"
       ? "select Create a contact segment, so the segment holds exactly these contacts"
@@ -142,6 +155,7 @@ function section(report: ScanReport, finding: Finding, number: number, files: Ex
     severity: finding.severity,
     rate: rateText(finding),
     points: report.score.pointsRecovered[checkKey(finding)] ?? 0,
+    scored: finding.scored !== false,
     why: finding.why,
     summary: finding.fix,
     filter: (guide?.filter ?? []).map(conditionText),
@@ -165,7 +179,8 @@ const columnsOf = (file: ExportFile) => {
 
 export function buildPlaybook(report: ScanReport, { sample = false }: { sample?: boolean } = {}): Playbook {
   // Biggest score gains first, so the playbook reads as a to-do list.
-  const ordered = topFixes(report.findings, report.score, { ...SCORING_CONFIG, topFixes: Infinity });
+  // Duplicates still to confirm come last.
+  const ordered = topFixes(report.findings, report.score, { ...SCORING_CONFIG, topFixes: Infinity }, { includeUnscored: true });
   const files = exportFiles(report, { sample });
   const sections = ordered.map(({ finding }, i) => section(report, finding, i + 1, files));
 
@@ -183,7 +198,7 @@ export function buildPlaybook(report: ScanReport, { sample = false }: { sample?:
       category,
       score: round(report.score.categories.find((c) => c.category === category)?.score ?? null),
     })),
-    topFixes: sections.slice(0, 5).map((s) => ({ title: s.title, points: s.points })),
+    topFixes: sections.filter((s) => s.scored).slice(0, 5).map((s) => ({ title: s.title, points: s.points })),
     sections,
     files: files.map((file) => ({ path: file.path, description: file.description, columns: columnsOf(file) })),
     importSteps: IMPORT_STEPS.map((ids) => {

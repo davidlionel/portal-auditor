@@ -62,7 +62,14 @@ function sectionContent(s: Section): Content[] {
     {
       stack: [
         heading(`${s.number}. ${s.title}`, "h2"),
-        { text: t(`${s.severity.toUpperCase()} severity · ${s.category} · ${points(s.points)} if fixed`), style: "meta" },
+        {
+          text: t(
+            s.scored
+              ? `${s.severity.toUpperCase()} severity · ${s.category} · ${points(s.points)} if fixed`
+              : `${s.severity.toUpperCase()} confidence · ${s.category} · Not scored until confirmed`,
+          ),
+          style: "meta",
+        },
       ],
       unbreakable: true,
       margin: [0, 14, 0, 4],

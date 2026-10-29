@@ -30,7 +30,34 @@ const deps = {
 
 type Timed = { at: number; event: ScanStreamEvent };
 
+// Peak memory during the scan, sampled every 20 ms. The baseline is taken
+// after a garbage collection (run with --expose-gc), so the peak above it is
+// what the scan itself held. Matching runs without yielding, so the sampler
+// can miss its peak; the process's own peak resident memory (maxRSS) can't.
+function memorySampler() {
+  (globalThis as { gc?: () => void }).gc?.();
+  const base = process.memoryUsage();
+  let heap = base.heapUsed;
+  let rss = base.rss;
+  const timer = setInterval(() => {
+    const now = process.memoryUsage();
+    heap = Math.max(heap, now.heapUsed);
+    rss = Math.max(rss, now.rss);
+  }, 20);
+  return () => {
+    clearInterval(timer);
+    const maxRss = process.resourceUsage().maxRSS * 1024;
+    return {
+      heapMb: (heap - base.heapUsed) / 2 ** 20,
+      rssMb: (rss - base.rss) / 2 ** 20,
+      maxRssMb: (maxRss - base.rss) / 2 ** 20,
+      gc: Boolean((globalThis as { gc?: unknown }).gc),
+    };
+  };
+}
+
 async function main() {
+  const stopSampling = memorySampler();
   const started = Date.now();
   const response = await handleScanRequest(
     new Request("http://localhost/api/scan", {
@@ -71,7 +98,9 @@ async function main() {
   const last = timed.at(-1)?.event;
   if (last?.type !== "done") throw new Error(`scan did not finish: ${JSON.stringify(last)}`);
   const report = last.report;
+  const groups = (checkId: string) => report.findings.find((f) => f.checkId === checkId)?.count ?? 0;
   const seconds = (Date.now() - started) / 1000;
+  const memory = stopSampling();
 
   // Gaps between updates, except ones the scan announced as a rate-limit wait.
   let maxGap = 0;
@@ -107,6 +136,11 @@ async function main() {
     ["retries match the 429s served", report.retries === stats.rateLimited],
     ["scan completed (not stopped by the rate limit)", report.incomplete === undefined],
     ["work lists capped at 1,000 on the big checks", report.notes.some((n) => /first 1,000 of 10,000/.test(n))],
+    // Planted in the newest 10,000 of each (see src/lib/simulator/portal.ts).
+    ["contact duplicates: 150 High, 83 Medium, 20 Low", groups("contacts.duplicates-high") === 150 && groups("contacts.duplicates-medium") === 83 && groups("contacts.duplicates-low") === 20],
+    ["company duplicates: 221 High, 200 Medium, 40 Low", groups("companies.duplicates-high") === 221 && groups("companies.duplicates-medium") === 200 && groups("companies.duplicates-low") === 40],
+    ["only High duplicates are scored", report.checks.filter((c) => /duplicates-(medium|low)/.test(c.checkId)).every((c) => c.status === "unscored")],
+    ["the switchboard number is set aside", report.notes.some((n) => /1 phone number is shared/.test(n))],
     ["key never in the stream", !raw.includes("SCALETESTKEY")],
     ["key never in the logs", logs.every((l) => !l.includes("SCALETESTKEY"))],
   ] as const;
@@ -121,6 +155,7 @@ async function main() {
   console.log(`| Longest gap between updates (not counting announced waits) | ${(maxGap / 1000).toFixed(1)} s (${maxGapAt}) | |`);
   console.log(`| Biggest jump between updates | ${biggestJump} points | |`);
   console.log(`| Percent halfway through (by time) | ${halfway}% | |`);
+  console.log(`| Peak memory above baseline | heap ${memory.heapMb.toFixed(1)} MB, RSS ${memory.rssMb.toFixed(1)} MB (sampled), peak RSS ${memory.maxRssMb.toFixed(1)} MB${memory.gc ? "" : " (no --expose-gc)"} | |`);
   console.log(`| Score | ${report.score.overall?.toFixed(1)} | |`);
   console.log("\n| Phase | Starts at | Percent at start |");
   console.log("|---|---|---|");

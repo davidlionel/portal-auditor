@@ -22,7 +22,7 @@ function finding(overrides: Partial<Finding> & { checkId: string }): Finding {
 }
 
 function report(findings: Finding[]): ScanReport {
-  const checks = findings.map((f) => ({ ...f, status: "scored" as const }));
+  const checks = findings.map((f) => ({ ...f, status: f.scored === false ? ("unscored" as const) : ("scored" as const) }));
   return {
     scannedAt: "2026-10-28T14:00:00.000Z",
     portal: {
@@ -82,23 +82,28 @@ describe("findings CSV", () => {
     const [header, row] = lines(csv);
     assert.equal(
       header,
-      "Check,Object,Category,Severity,Count,Affected,Population,Rate (%),Points recovered,Why it matters,How to fix",
+      "Check,Object,Category,Severity,Count,Affected,Population,Rate (%),Scored,Points recovered,Why it matters,How to fix",
     );
     // 2% medium scores 92 in the only category, so fixing it recovers 8.
-    assert.equal(row, "Missing email,Contacts,Contacts,medium,20,20,1000,2,8,Why.,Fix.");
+    assert.equal(row, "Missing email,Contacts,Contacts,medium,20,20,1000,2,yes,8,Why.,Fix.");
+  });
+
+  it('marks duplicates still to confirm as not scored', () => {
+    const csv = findingsCsv(report([finding({ checkId: "contacts.duplicates-medium", title: "Maybe", scored: false, count: 1, affected: 2 })]));
+    assert.match(lines(csv)[1], /^Maybe,Contacts,Contacts,medium,1,2,100,2,no,0,/);
   });
 });
 
 describe("work list CSV", () => {
   const dupes = finding({
-    checkId: "contacts.duplicate-name-company",
+    checkId: "contacts.duplicates-high",
     title: "Duplicates",
     severity: "high",
     count: 1,
     affected: 2,
     records: [
-      { id: "11", group: 1 },
-      { id: "12", group: 1 },
+      { id: "11", group: 1, signals: "same phone + same name" },
+      { id: "12", group: 1, signals: "same phone + same name" },
     ],
   });
   const missing = finding({
@@ -122,18 +127,18 @@ describe("work list CSV", () => {
 
   it("lists IDs, check, group, link and capped marker for one object only", () => {
     assert.deepEqual(lines(workListCsv(r, "contacts")), [
-      "Record ID,Object type,Check,Severity,Duplicate group,HubSpot record link,Capped,Cleanup reason",
-      "11,Contacts,Duplicates,high,1,https://app.hubspot.com/contacts/123/record/0-1/11,,Portal audit 2026-10-28: Duplicates",
-      "12,Contacts,Duplicates,high,1,https://app.hubspot.com/contacts/123/record/0-1/12,,Portal audit 2026-10-28: Duplicates",
-      "21,Contacts,Missing email,medium,,https://app.hubspot.com/contacts/123/record/0-1/21,\"first 2 of 4,512\",Portal audit 2026-10-28: Missing email",
-      "22,Contacts,Missing email,medium,,https://app.hubspot.com/contacts/123/record/0-1/22,\"first 2 of 4,512\",Portal audit 2026-10-28: Missing email",
+      "Record ID,Object type,Check,Severity,Duplicate group,Match signals,HubSpot record link,Capped,Cleanup reason",
+      "11,Contacts,Duplicates,high,1,same phone + same name,https://app.hubspot.com/contacts/123/record/0-1/11,,\"Portal audit 2026-10-28: Duplicates, group 1\"",
+      "12,Contacts,Duplicates,high,1,same phone + same name,https://app.hubspot.com/contacts/123/record/0-1/12,,\"Portal audit 2026-10-28: Duplicates, group 1\"",
+      "21,Contacts,Missing email,medium,,,https://app.hubspot.com/contacts/123/record/0-1/21,\"first 2 of 4,512\",Portal audit 2026-10-28: Missing email",
+      "22,Contacts,Missing email,medium,,,https://app.hubspot.com/contacts/123/record/0-1/22,\"first 2 of 4,512\",Portal audit 2026-10-28: Missing email",
     ]);
   });
 
   it("leaves the link column blank when record links are off (the public sample)", () => {
     const [header, first] = lines(workListCsv(r, "contacts", { recordLinks: false }));
     assert.match(header, /HubSpot record link/);
-    assert.equal(first, "11,Contacts,Duplicates,high,1,,,Portal audit 2026-10-28: Duplicates");
+    assert.equal(first, '11,Contacts,Duplicates,high,1,same phone + same name,,,"Portal audit 2026-10-28: Duplicates, group 1"');
   });
 
   it("uses each object's type ID in links", () => {
@@ -151,6 +156,7 @@ describe("work list CSV", () => {
 
   it("prefills the cleanup reason with the scan date and check", () => {
     assert.equal(cleanupReason(r, missing), "Portal audit 2026-10-28: Missing email");
+    assert.equal(cleanupReason(r, dupes, dupes.records![0]), "Portal audit 2026-10-28: Duplicates, group 1");
   });
 });
 
@@ -159,10 +165,10 @@ describe("per-finding import file", () => {
     checkId: "contacts.duplicates",
     title: "Duplicates",
     records: [
-      { id: "11", group: 1 },
-      { id: "12", group: 1 },
-      { id: "13", group: 2 },
-      { id: "11", group: 1 },
+      { id: "11", group: 1, signals: "same company name + same name" },
+      { id: "12", group: 1, signals: "same company name + same name" },
+      { id: "13", group: 2, signals: "same phone + nickname" },
+      { id: "11", group: 1, signals: "same company name + same name" },
     ],
   });
   const typos = finding({ checkId: "contacts.malformed-email", title: "Typo emails", records: [{ id: "21" }] });
@@ -174,10 +180,10 @@ describe("per-finding import file", () => {
 
   it("keeps duplicate groups for review and lists each record once", () => {
     assert.deepEqual(lines(importCsv(r, dupes)), [
-      "Record ID,Cleanup reason,Duplicate group",
-      "11,Portal audit 2026-10-28: Duplicates,1",
-      "12,Portal audit 2026-10-28: Duplicates,1",
-      "13,Portal audit 2026-10-28: Duplicates,2",
+      "Record ID,Cleanup reason,Duplicate group,Match signals",
+      '11,"Portal audit 2026-10-28: Duplicates, group 1",1,same company name + same name',
+      '12,"Portal audit 2026-10-28: Duplicates, group 1",1,same company name + same name',
+      '13,"Portal audit 2026-10-28: Duplicates, group 2",2,same phone + nickname',
     ]);
   });
 

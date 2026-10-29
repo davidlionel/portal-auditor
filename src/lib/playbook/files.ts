@@ -33,12 +33,14 @@ export const COLUMN_NOTES: Record<string, string> = {
   Affected: "Records or properties affected; the top of the rate.",
   Population: "Records or properties checked; the bottom of the rate.",
   "Rate (%)": "Affected as a share of population.",
+  Scored: 'Whether the check counts toward the health score. Duplicates of medium or low confidence are "no" until someone confirms them.',
   "Points recovered": "How much the overall score rises when this is fixed.",
   "Why it matters": "The effect on reports, automation or outreach.",
   "How to fix": "The fix in one sentence; the playbook has the steps.",
   "Record ID": "HubSpot's ID for the record. Map it to Record ID when importing.",
   "Object type": "Contacts, Companies or Deals.",
   "Duplicate group": "Records with the same number are likely duplicates of each other. For review only; don't import it.",
+  "Match signals": 'Which details agreed for the group, e.g. "same phone + same company domain + nickname". Never the values themselves. For review only; don\'t import it.',
   "HubSpot record link": "Opens the record in HubSpot (blank in the sample, whose portal you can't log in to).",
   Capped: 'Filled when the check matched more records than the file lists, e.g. "first 1,000 of 4,512". Use the HubSpot filter for the full set.',
   "Cleanup reason": "Why the record is listed. Import it into a Cleanup reason property to filter on later.",
@@ -67,11 +69,12 @@ export function exportFiles(report: ScanReport, { sample = false }: { sample?: b
     },
     ...workListObjects(report).map((objectType) => {
       const first = report.findings.find((f) => f.objectType === objectType && f.records?.length);
+      const firstRecord = first?.records?.[0];
       return {
         path: workListFileName(report, objectType),
         kind: "work-list" as const,
         description: `Every flagged ${SINGULAR[objectType]} record, one row per record per check.`,
-        exampleReason: first && cleanupReason(report, first),
+        exampleReason: first && cleanupReason(report, first, firstRecord),
         content: workListCsv(report, objectType, { recordLinks: !sample }),
       };
     }),
@@ -79,7 +82,7 @@ export function exportFiles(report: ScanReport, { sample = false }: { sample?: b
       path: importFileName(finding),
       kind: "import" as const,
       description: `Import file for "${finding.title}": one row per record.`,
-      exampleReason: cleanupReason(report, finding),
+      exampleReason: cleanupReason(report, finding, finding.records?.[0]),
       content: importCsv(report, finding),
     })),
   ];

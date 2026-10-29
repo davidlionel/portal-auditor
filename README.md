@@ -21,10 +21,10 @@ The deployed site is **demo-only**: it shows a sample report from a HubSpot deve
 - Lifecycle stage Customer with no closed-won deal
 - Missing email
 - Malformed or mistyped email (e.g. `gmial.com`)
-- Likely duplicates: same first name, last name and company name
+- Duplicates in three confidence tiers, each listing what matched (see [Duplicate detection](#duplicate-detection))
 
 **Companies**
-- Duplicate domains
+- Duplicates in three confidence tiers: the same domain, subdomains of one domain, or the same name and location
 - Companies with no associated contacts
 
 **Deals**
@@ -34,12 +34,40 @@ The deployed site is **demo-only**: it shows a sample report from a HubSpot deve
 
 Each finding shows a severity, a count, its rate (how many of the records or properties checked were affected), the points fixing it would add to the score, up to 10 samples (property names, or record IDs linked to HubSpot), why it matters and how to fix it. Sensitive and highly sensitive properties are not audited.
 
+## Duplicate detection
+
+HubSpot's Manage duplicates tool needs a Professional or Enterprise plan. On Free and Starter portals, this is the duplicate check. On higher plans, it adds match reasons and confidence tiers alongside HubSpot's tool.
+
+**Contacts** are compared on their name and four signals: the same phone (last 10 digits of phone or mobile), the same company name, the same email domain (free and internet-provider domains such as gmail.com don't count), and the same company (the same associated company record, or companies with the same domain). Names match exactly, as a nickname (Bob and Robert, Jon and John; about 140 groups in `src/config/nicknames.ts`), or one typo apart (Micheal and Michael; names of 5+ letters only). Case, punctuation, spaces and accents are ignored.
+
+| Names | 1 signal | 2 signals | 3+ signals |
+|---|---|---|---|
+| Exact | High | High | High |
+| Nickname | Medium | High | High |
+| One typo apart | Low | Medium | Medium |
+| First name or whole name missing on one record | — | Low, if one is the phone | Medium |
+
+Two records whose first names differ (Emma and Oliver Clark) never match. Safeguards against false positives:
+
+- **Shared lines:** a phone number on 5 or more contacts (a switchboard or a household) isn't a signal.
+- **Large organizations:** a company name, email domain or company shared by 25 or more contacts is a weak signal. Without a phone or a smaller organization signal, the tier drops one level, so two different John Smiths at a large company are Medium, not High.
+- **Job changes:** two records with different company names are at most Medium.
+
+**Companies:** the same domain, or one company's domain among the other's additional domains, is High. The same root domain (`eu.acme.com` and `acme.com`, using the Public Suffix List, so separate `myshopify.com` shops never match) is Medium. Without a domain on one side, the same name and city or postal code is Medium, and the same name and state or country is Low. The same domain name with a different ending (`acme.com` and `acme.co.uk`) is Low. The same name in different cities never matches.
+
+Each group lists which signals agreed ("same phone + same email domain + nickname"), never the values. High groups go to Manage duplicates, or to the record's Merge action on any plan. Medium and Low go to the record owners to confirm first. All thresholds are in `src/config/checks.ts`.
+
+**Cost and memory.** Only records that share a phone, email domain, company name or company are compared, and in groups over 50 only those with similar names, so the work grows in line with the number of records. Each page of 200 records is reduced to normalized names and numeric keys as it arrives and then dropped. Nothing is written to disk, and the keys are gone when the scan ends.
+
+Measured with `npm run bench:dedupe`, in a worst case where every contact shares one email domain: the keys take about 110 bytes per contact, and matching 10,000 contacts (the window) peaks at about 23 MB and takes about 0.15 s. The window keeps that the same for any portal size. On the simulated 250K portal, the whole scan's peak memory rose from about 16 MB to about 49 MB above its starting point, with no extra API calls and no measurable change in scan time. Matching every contact in a portal, which the scan doesn't do, would peak at about 330 MB for 250,000 contacts and 930 MB for 1,000,000.
+
 ## Health score
 
 The report opens with a score out of 100, a score for each category, and the top 5 fixes.
 
 - **Each check scores by rate, not count.** Rate = records (or properties) affected ÷ records (or properties) checked. A check scores 100 at 0% and loses points in a straight line until it reaches 0 at 10% for high-severity checks, 25% for medium and 50% for low. Because it's a rate, a 250,000-contact portal isn't marked down for being big: 2% of contacts missing an email scores the same at any size.
 - **What each rate is measured against.** All contacts or companies for presence checks; Customers for "Customer with no closed-won deal"; open deals for missing close date and stale deals; open or won deals for missing amount; the recent-records window for duplicate and email checks; custom properties for property checks. Duplicate checks count records in duplicate groups, so a group of six weighs more than a pair.
+- **Only High-confidence duplicates count.** Medium and Low duplicates are reported, exported and in the playbook, but not scored until someone confirms them.
 - **Categories** average their checks, weighting high, medium and low severity 3:2:1. **The overall score** weights Contacts 35, Deals 25, Companies 20 and Properties 20. Automation (lists and workflows) isn't checked yet, so it isn't scored.
 - **Skipped checks don't count.** A check that can't run (a missing scope, a property the portal doesn't have, no records yet) is left out, its weight is shared among the checks that ran, and the report lists it as not scored.
 - **Top 5 fixes** are ranked by points recovered: how much the overall score would rise if that problem were fixed.
@@ -51,14 +79,14 @@ All weights and zero-points live in `src/config/scoring.ts`. The one-line explan
 After a scan, and on the sample report, **Download playbook (PDF)** gives a step-by-step cleanup guide and **Download everything (ZIP)** gives the playbook plus every CSV from that scan in one folder. Both are built in the browser from the report on the page; nothing is sent to the server or stored. The PDF code (pdfmake, about 1.6 MB) loads only when one of these buttons is clicked.
 
 - **Cover:** portal, scan date, overall and category scores, the Top 5 fixes, and "HubSpot steps verified against HubSpot's documentation on <date>", the oldest verification date among the steps it uses.
-- **One section per finding, biggest score gain first:** what's wrong, why it matters, how to fix it in HubSpot (the index-page filter, settings path and bulk action), and which CSV to use. When a HubSpot filter finds every affected record, it says "No CSV needed" and gives the filter. Only mistyped emails and duplicates need a CSV, because no filter can find them. Stale deals and deals missing an amount or close date also say how to split the work by deal owner. Each section ends with the HubSpot pages it relies on.
-- **Appendix A** describes each CSV column by column. **Appendix B** gives the import steps: Record ID, Update existing records only, a contact segment for contacts, or a "Cleanup reason" property for companies and deals.
+- **One section per finding, biggest score gain first:** what's wrong, why it matters, how to fix it in HubSpot (the index-page filter, settings path and bulk action), and which CSV to use. When a HubSpot filter finds every affected record, it says "No CSV needed" and gives the filter. Only mistyped emails and duplicates need a CSV, because no filter can find them. Stale deals and deals missing an amount or close date also say how to split the work by deal owner. High-confidence duplicates go to Manage duplicates or the record's Merge action; Medium and Low come last, marked not scored, and say how to give each owner a view of their own possible duplicates to confirm. Each section ends with the HubSpot pages it relies on.
+- **Appendix A** describes each CSV column by column. **Appendix B** gives the import steps: Record ID, Update existing records only, a contact segment for contacts, or a "Cleanup reason" property for companies, deals and any duplicate file.
 - **Plain black and white**, so it prints and photocopies cleanly. Characters the bundled font can't draw (arrows, Japanese, Chinese, Korean) print as "?" and the section says so.
 - **No record values:** record IDs stay in the CSVs, and the PDF holds only check text, property names, counts and portal details. No owner names or IDs anywhere.
 
 ### Where the HubSpot steps come from
 
-Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (only "correct each mistyped email") is marked `general` and labelled "General guidance" in the PDF.
+Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (correcting mistyped emails, reviewing stale deals with their owners, owners confirming possible duplicates) is marked `general` and labelled "General guidance" in the PDF.
 
 - `npm run check:hubspot-docs` fetches every source page, fails any that redirect, return an error or no longer contain their key phrases, and always exits 0.
 - A weekly GitHub Action (`.github/workflows/hubspot-docs.yml`, Mondays, or run it from the Actions tab) runs the same check and opens one issue labelled `hubspot-docs` listing anything that failed, or comments on the open one. It never fails a build or a deploy.
@@ -70,9 +98,9 @@ When a page changes, re-read it, update the entry's text, source and key phrases
 
 CSV downloads, built in the browser from the report on the page. Nothing is sent to the server or stored.
 
-- **Findings summary:** one row per finding with check, object, category, severity, count, records affected, population, rate, points recovered, why it matters and how to fix it.
-- **Records work list:** one file per object with record ID, object type, check, severity, duplicate group, HubSpot record link, a capped marker and a prefilled cleanup reason (for example "Portal audit 2026-10-28: Contacts with no email address"). Record IDs only: no names, emails, owners or other field values. Records in the same duplicate group share a group number.
-- **Import files** (in the ZIP, under `imports/`): one per finding that needs a CSV (mistyped emails, duplicate contacts, duplicate companies), one row per record with Record ID, Cleanup reason and, for duplicates, the group number.
+- **Findings summary:** one row per finding with check, object, category, severity, count, records affected, population, rate, whether it's scored, points recovered, why it matters and how to fix it.
+- **Records work list:** one file per object with record ID, object type, check, severity, duplicate group, match signals, HubSpot record link, a capped marker and a prefilled cleanup reason (for example "Portal audit 2026-10-28: Contacts with no email address"). Record IDs only: no names, emails, owners or other field values. Records in the same duplicate group share a group number, and their cleanup reason ends with it ("…, group 12").
+- **Import files** (in the ZIP, under `imports/`): one per finding that needs a CSV (mistyped emails, and each duplicate tier for contacts and companies), one row per record with Record ID, Cleanup reason and, for duplicates, the group number and match signals.
 
 Count checks page through the matching records during the scan, 200 per call, up to 1,000 per check (`records.workListCap` in `src/config/checks.ts`). When a check matches more, its rows say "first 1,000 of N" and the report notes it. The service key is discarded after the scan, so IDs can't be fetched later. Duplicate and email checks use the IDs already read from the recent-records window.
 
@@ -86,7 +114,7 @@ HubSpot can import the work list by Record ID to find or tag these records. Impo
 4. Set columns you don't want written to **Don't import**.
 5. Then either:
    - **Contacts:** on the final step, tick **Create a contact segment** to get a segment (list) of exactly these contacts.
-   - **Any object:** first create a single-line text property such as "Cleanup reason", then map the Check column to it during the import. Then filter a view or build a segment on that property.
+   - **Any object:** map the **Cleanup reason** column to a new single-line text property named "Cleanup reason". Then filter a view or build a segment on that property.
 
 Remove the property or segment when the cleanup is done.
 
@@ -107,7 +135,7 @@ The key is pasted into the page for each scan and never saved.
 | Scope | Used for | Why |
 |---|---|---|
 | `crm.schemas.contacts.read`, `crm.schemas.companies.read`, `crm.schemas.deals.read` | `GET /crm/properties/2026-09/{object}` | List property definitions: labels, descriptions, dropdown options |
-| `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search` | Count records for fill rates and record checks; read name, company, email and domain on recent records for duplicate and email checks |
+| `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search` | Count records for fill rates and record checks; read name, company, email, phone, mobile phone and associated company ID on recent contacts, and domain, additional domains, name and location on recent companies, for duplicate and email checks |
 | none listed in HubSpot's docs | `GET /account-info/2026-09/details` | Confirms which portal is connected (Hub ID, account type, data center) |
 
 Every scope is read-only. If one is missing, the scan skips that object or check and says so in the report.
@@ -144,12 +172,13 @@ The simulator only runs when **both** are true: the app is a development build (
 npm test
 ```
 
-Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names or emails it returned appear in the playbook, the PDF or any file in the ZIP.
+Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. The duplicate tests plant a case for every tier and the controls that must never reach High: two John Smiths at different companies, siblings sharing a home phone, a switchboard number on 20 contacts, free email domains, and two John Smiths on a large company's email domain. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names, emails, phone numbers, domains or locations it returned appear in the playbook, the PDF or any file in the ZIP.
 
-Two slower checks run separately. Both are plain Node scripts, so they work the same in PowerShell, cmd and bash:
+Slower checks run separately. Both are plain Node scripts, so they work the same in PowerShell, cmd and bash:
 
 ```bash
 npm run test:scale            # full scan of the simulated 250K portal, about 2½ minutes
+npm run bench:dedupe          # duplicate matching memory and time at 10K, 250K and 1M contacts
 npm run check:simulator-prod  # builds for production and proves the simulator is blocked
 npm run check:deploy -- <url> # checks a running site is demo-only (default http://localhost:3000)
 npm run check:hubspot-docs    # checks the HubSpot pages the playbook cites (needs internet)
@@ -201,7 +230,7 @@ Everything that is a count uses the CRM Search API's `total`, so no records are 
 - **Record checks** (missing lifecycle stage, missing email, Customer with no won deal, companies with no contacts, deals missing amount or close date, stale deals): one search each returns the total, the first 10 IDs as samples, and up to 200 IDs for the work list. Checks with more matches page on, up to 1,000 IDs (5 calls).
 - **Populations** for the score: the object totals above, plus one search each for Customers, open deals, and open or won deals.
 
-Duplicate and email checks need field values, so they read a **window of the most recently created records**: up to 10,000 contacts and 10,000 companies (200 per call), requesting only the fields they compare. Records are grouped by a normalized key in one pass, not compared pair by pair. Field values stay in server memory during the scan; the report shows record IDs only.
+Duplicate and email checks need field values, so they read a **window of the most recently created records**: up to 10,000 contacts and 10,000 companies (200 per call), requesting only the fields they compare (optional ones only when the portal has them). Each page is reduced to matching keys and dropped, and only records sharing a key are compared (see [Duplicate detection](#duplicate-detection)). The keys stay in server memory during the scan; the report shows record IDs only.
 
 Search calls run one at a time, at least 250ms apart, to stay under HubSpot's limit of 5 search requests per second per account. Each report shows the number of API calls and the scan time.
 
@@ -215,19 +244,21 @@ Search calls run one at a time, at least 250ms apart, to stay under HubSpot's li
 | Score populations (Customers, open deals, open or won deals) | 3 |
 | Contact and company windows (10,000 ÷ 200 each) | 100 |
 | Retries after injected 429s | 13 |
-| **Total** | **454 calls in 2 min 23 s** |
+| **Total** | **454 calls in 2 min 24 s** |
 
 Before measuring, the estimate was about 445 calls and 1 minute 50 seconds. The count checks needed 31 calls rather than the 35 allowed, because some had fewer than 1,000 matches. The scan took longer than estimated because many simulated responses take longer than the 250 ms gap between searches, and the 13 retries added roughly 20–25 seconds of waiting. A real portal's timing depends on HubSpot's actual response times and on other apps sharing the portal's limits.
 
-The window keeps duplicate checks at a fixed cost, so a portal with 1 million contacts still uses 50 calls for them.
+The window keeps duplicate checks at a fixed cost, so a portal with 1 million contacts still uses 50 calls for them. The stronger duplicate matching reads extra fields on the same pages, so it adds no calls.
 
 ## What the record checks can miss
 
-- **Duplicates outside the window.** In a 250K-contact portal the window is the newest 4% of contacts, so a duplicate is only found when both records are recent. The report states the coverage on every scan. HubSpot's own duplicate tool (CRM > Contacts or Companies, three vertical dots icon > Manage duplicates) scans the whole portal and is where duplicates should be merged.
-- **Near-matches.** Contact duplicates match on exact first name, last name and company name after normalizing case and punctuation (names also ignore spaces, so O'Neil matches oneil) and dropping company suffixes like Inc or Ltd. Jon / John, nicknames, typos, and "Acme Corp" vs "Acme Holdings" aren't matched. Contacts with a blank name or company name aren't checked.
-- **Subdomains.** `eu.acme.com` and `acme.com` count as different domains.
+- **Duplicates outside the window.** In a 250K-contact portal the window is the newest 4% of contacts, so a duplicate is only found when both records are recent. The report states the coverage on every scan. On Professional and Enterprise plans, HubSpot's Manage duplicates tool (CRM > Contacts or Companies, three vertical dots icon > Manage duplicates) checks the whole portal.
+- **Records that share nothing but a similar name.** Pairs are only compared when they share a phone, email domain, company name or company, so two records with the same name and nothing else in common aren't matched.
+- **Different company names.** "Acme Corp" and "Acme Holdings" are different company names; a pair needs another signal to match.
+- **Companies outside the company window.** A contact's company domain is only known when the company is among the 10,000 most recent companies. The associated company ID comes from `associatedcompanyid`, which isn't in HubSpot's current docs, so it's only read when the portal's property list has it.
+- **Nicknames not in the table.** The nickname table is hand-written and English-only.
 - **Won deals on the company only.** "Customer with no closed-won deal" only sees deals associated with the contact.
 - **Recently closed deals.** HubSpot updates a contact's deal close date, and its search index, a short while after a deal closes, so a deal won in the last few minutes can still show its contact under "Customer with no closed-won deal".
 - **Email formats HubSpot already rejects.** Most bad formats never get in, so the malformed check mostly finds typo domains from a fixed list.
 - **Stale deals on lower tiers.** The check uses HubSpot's "date entered current stage" property; if the portal doesn't have it, the check is skipped with a note.
-- **Not yet checked:** contacts sharing only a phone number, and free-text fields that should be dropdowns.
+- **Not yet checked:** free-text fields that should be dropdowns. A shared phone number alone is never a duplicate match.

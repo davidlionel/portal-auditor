@@ -106,16 +106,23 @@ export function scoreChecks(runs: CheckRun[], config: ScoringConfig = SCORING_CO
 }
 
 // Findings ranked by points recovered; ties go to the more severe, then the
-// more common problem.
+// more common problem. Unscored findings (duplicates still to confirm) are
+// left out unless asked for, and then come last.
 export function topFixes(
   findings: Finding[],
   score: HealthScore,
   config: ScoringConfig = SCORING_CONFIG,
+  { includeUnscored = false }: { includeUnscored?: boolean } = {},
 ): TopFix[] {
-  return findings
+  const scoredFirst = [
+    ...findings.filter((f) => f.scored !== false),
+    ...(includeUnscored ? findings.filter((f) => f.scored === false) : []),
+  ];
+  return scoredFirst
     .map((finding) => ({ finding, points: score.pointsRecovered[checkKey(finding)] ?? 0 }))
     .sort(
       (a, b) =>
+        Number(a.finding.scored === false) - Number(b.finding.scored === false) ||
         b.points - a.points ||
         SEVERITY_RANK[a.finding.severity] - SEVERITY_RANK[b.finding.severity] ||
         b.finding.affected - a.finding.affected,

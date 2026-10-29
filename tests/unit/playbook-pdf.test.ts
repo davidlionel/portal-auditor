@@ -73,7 +73,8 @@ describe("playbook PDF", () => {
     };
     for (const s of playbook.sections) {
       find(flat(`${s.number}. ${s.title}`));
-      const csvPage = find("CSV");
+      // The CSV advice itself, not the word "CSV" in a step.
+      const csvPage = find(flat(s.csv).slice(0, 30));
       let last = csvPage;
       for (const url of s.sources) last = find(url);
       assert.equal(last, csvPage, `${s.title}: sources split from the CSV block`);

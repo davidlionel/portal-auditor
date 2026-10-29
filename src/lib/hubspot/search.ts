@@ -106,6 +106,8 @@ export type PagingHooks = {
   onTotal?: (total: number, pages: number) => void;
   // After each page, with the rows fetched so far.
   onPage?: (fetched: number) => void;
+  // Each page's rows as they arrive.
+  onRows?: (rows: SearchRow[]) => void;
 };
 
 // Pages through a search, 200 per call, until `cap` rows (never more than one
@@ -119,32 +121,39 @@ export async function fetchMatching(
   search: Omit<SearchRequest, "limit" | "after">,
   cap: number,
   hooks: PagingHooks = {},
-): Promise<HubSpotResult<{ total: number; rows: SearchRow[] }>> {
+  // False to hand each page to onRows and drop it, instead of returning all
+  // rows at the end.
+  keep = true,
+): Promise<HubSpotResult<{ total: number; rows: SearchRow[]; fetched: number }>> {
   const limit = Math.max(1, Math.min(cap, MAX_RESULTS_PER_QUERY));
   const rows: SearchRow[] = [];
+  let fetched = 0;
   let total = 0;
   let after: string | undefined;
 
   do {
     const page = await searchRecords(transport, tracker, pace, objectType, {
       ...search,
-      limit: Math.min(MAX_PAGE_SIZE, limit - rows.length),
+      limit: Math.min(MAX_PAGE_SIZE, limit - fetched),
       after,
     });
     if (!page.ok) return page;
-    if (!rows.length) hooks.onTotal?.(page.data.total, pagesFor(Math.min(page.data.total, limit)));
+    if (!fetched) hooks.onTotal?.(page.data.total, pagesFor(Math.min(page.data.total, limit)));
     total = page.data.total;
-    rows.push(...page.data.results);
-    hooks.onPage?.(rows.length);
+    fetched += page.data.results.length;
+    hooks.onRows?.(page.data.results);
+    if (keep) rows.push(...page.data.results);
+    hooks.onPage?.(fetched);
     after = page.data.nextAfter;
     if (!page.data.results.length) break;
-  } while (after && rows.length < limit);
+  } while (after && fetched < limit);
 
-  return { ok: true, data: { total, rows } };
+  return { ok: true, data: { total, rows, fetched } };
 }
 
 // The most recently created records, newest first, up to `cap`. Used by
-// checks that need field values.
+// checks that need field values. Each page goes to `hooks.onRows` and is
+// then dropped, so the raw values never pile up; returns how many were read.
 export async function fetchRecentWindow(
   transport: Transport,
   tracker: CallTracker,
@@ -153,7 +162,7 @@ export async function fetchRecentWindow(
   properties: string[],
   cap: number,
   hooks: PagingHooks = {},
-): Promise<HubSpotResult<SearchRow[]>> {
+): Promise<HubSpotResult<number>> {
   const result = await fetchMatching(
     transport,
     tracker,
@@ -162,6 +171,7 @@ export async function fetchRecentWindow(
     { properties, sorts: [{ propertyName: "createdate", direction: "DESCENDING" }] },
     cap,
     hooks,
+    false,
   );
-  return result.ok ? { ok: true, data: result.data.rows } : result;
+  return result.ok ? { ok: true, data: result.data.fetched } : result;
 }

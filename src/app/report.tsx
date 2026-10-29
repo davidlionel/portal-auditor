@@ -70,6 +70,7 @@ function ScoreCard({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
   const { score, checks } = report;
   const skipped = checks.filter((c) => c.status === "skipped");
   const scored = checks.filter((c) => c.status === "scored").length;
+  const unscored = checks.filter((c) => c.status === "unscored" && c.affected > 0).length;
 
   return (
     <div className={styles.card}>
@@ -103,7 +104,8 @@ function ScoreCard({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
         {score.overall !== null && <span className={styles.note}>out of 100</span>}
       </div>
       <p className={styles.note}>
-        {scored} checks scored{skipped.length ? `, ${skipped.length} skipped and not scored` : ""}.
+        {scored} checks scored{skipped.length ? `, ${skipped.length} skipped and not scored` : ""}
+        {unscored ? `, ${unscored} duplicate ${unscored === 1 ? "check" : "checks"} to confirm (not scored)` : ""}.
       </p>
 
       <div className={styles.categoryGrid}>
@@ -250,7 +252,15 @@ export function Report({ report, demo }: { report: ScanReport; demo?: DemoInfo }
                     {OBJECT_LABELS[f.objectType]} · {f.count.toLocaleString("en-US")} {f.records?.some((r) => r.group) ? "duplicate groups" : "found"} ·{" "}
                     {rateText(f)}
                     {report.score.pointsRecovered[checkKey(f)] ? ` · fixing it: ${points(report.score.pointsRecovered[checkKey(f)])}` : ""}
+                    {f.scored === false ? " · not scored until confirmed" : ""}
                   </p>
+                  {f.matchSummary?.length ? (
+                    <p className={styles.findingText}>
+                      <strong>Why they matched:</strong>{" "}
+                      {f.matchSummary.map((m) => `${m.signals} (${m.groups.toLocaleString("en-US")} ${m.groups === 1 ? "group" : "groups"})`).join("; ")}
+                      {f.count > f.matchSummary.reduce((n, m) => n + m.groups, 0) ? "; others in the export" : ""}.
+                    </p>
+                  ) : null}
                   <p className={styles.findingText}>
                     <strong>Why it matters:</strong> {f.why}
                   </p>

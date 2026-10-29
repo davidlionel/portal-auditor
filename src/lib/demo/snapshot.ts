@@ -1,3 +1,4 @@
+import { SIGNAL_LABELS } from "../dedupe/match";
 import type { ScanReport } from "../scan";
 
 // A saved scan of the developer test portal, shown as the public sample
@@ -20,10 +21,11 @@ const ALLOWED_KEYS = {
   portal: ["portalId", "accountType", "timeZone", "companyCurrency", "uiDomain", "dataHostingLocation"],
   finding: [
     "checkId", "title", "category", "objectType", "severity", "count", "affected", "population",
-    "samples", "items", "recordSamples", "records", "why", "fix",
+    "samples", "items", "recordSamples", "records", "matchSummary", "scored", "why", "fix",
   ],
-  record: ["id", "group"],
-  check: ["checkId", "title", "severity", "category", "objectType", "status", "affected", "population", "reason"],
+  record: ["id", "group", "signals"],
+  matchSummary: ["signals", "groups"],
+  check: ["checkId", "title", "severity", "scored", "category", "objectType", "status", "affected", "population", "reason"],
   score: ["overall", "categories", "pointsRecovered", "explanation"],
   category: ["category", "score", "scored", "skipped"],
   incomplete: ["kind", "message"],
@@ -34,6 +36,11 @@ const EMAIL = /[^\s@]+@[^\s@]+/;
 // Phone-shaped text such as "(415) 555-0142" or "+44 20 7946 0958". Record
 // IDs are plain digit strings and are checked separately.
 const PHONE = /(\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4}/;
+
+// Match signals may only use the fixed labels, never record values.
+const LABELS = new Set<string>(Object.values(SIGNAL_LABELS));
+const onlyLabels = (signals: unknown) =>
+  typeof signals === "string" && signals.split(" + ").every((label) => LABELS.has(label));
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -92,6 +99,14 @@ export function validateSnapshot(snapshot: unknown): string[] {
       records.forEach((r, j) => {
         if (!keys(r, ALLOWED_KEYS.record, `${where}.records[${j}]`)) return;
         if (typeof r.id !== "string" || !RECORD_ID.test(r.id)) errors.push(`${where}.records[${j}].id is not a record ID`);
+        if (r.signals !== undefined && !onlyLabels(r.signals)) errors.push(`${where}.records[${j}].signals has text that isn't a match signal`);
+      });
+    }
+    if (f.matchSummary !== undefined) {
+      const summary = Array.isArray(f.matchSummary) ? f.matchSummary : [];
+      summary.forEach((m, j) => {
+        if (!keys(m, ALLOWED_KEYS.matchSummary, `${where}.matchSummary[${j}]`)) return;
+        if (!onlyLabels(m.signals)) errors.push(`${where}.matchSummary[${j}].signals has text that isn't a match signal`);
       });
     }
   });

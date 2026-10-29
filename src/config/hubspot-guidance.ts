@@ -33,6 +33,7 @@ const AUTO_ASSOCIATE = `${KB}/object-settings/automatically-create-and-associate
 const PIPELINES = `${KB}/object-settings/set-up-and-customize-pipelines`;
 const IMPORT = `${KB}/import-and-export/import-records-for-a-single-object`;
 const FIELD_TYPES = `${KB}/properties/property-field-types-in-hubspot`;
+const MERGE = `${KB}/records/merge-records`;
 
 export const GUIDANCE = {
   // Finding records on an index page.
@@ -58,6 +59,18 @@ export const GUIDANCE = {
     text: "To split the work by rep, add a Deal owner condition to the filter, or save one view per owner.",
     source: DEAL_PROPS,
     keyPhrases: ["Deal owner: the user the deal is assigned to"],
+    lastVerified: "2026-10-28",
+  },
+  contactOwnerFilter: {
+    text: "Add a Contact owner condition, or save one view per owner, so each owner sees only their own contacts.",
+    source: CONTACT_PROPS,
+    keyPhrases: ["Contact owner: the contact's owner"],
+    lastVerified: "2026-10-28",
+  },
+  companyOwnerFilter: {
+    text: "Add an Owner condition (the company's owner), or save one view per owner, so each owner sees only their own companies.",
+    source: COMPANY_PROPS,
+    keyPhrases: ["Owner: the company's owner"],
     lastVerified: "2026-10-28",
   },
 
@@ -108,6 +121,33 @@ export const GUIDANCE = {
     text: "Review each pair and click Merge only when they are the same. Merged records cannot be reverted.",
     source: DUPLICATES,
     keyPhrases: ["Merged records cannot be reverted"],
+    lastVerified: "2026-10-28",
+  },
+  duplicatesPlan: {
+    text: "Manage duplicates needs a Professional or Enterprise subscription. On Free and Starter portals, the auditor's groups are your duplicate check: merge them from the record (next step). On higher plans, use each group's match signals and confidence alongside HubSpot's own list.",
+    source: DUPLICATES,
+    keyPhrases: ["A Professional or Enterprise subscription is required to manage individual duplicates"],
+    lastVerified: "2026-10-28",
+  },
+  mergeFromRecord: {
+    text: "To merge from the record (any plan): open one record in the group, in the left panel click the Actions dropdown and select Merge, search for and select the other record, and click Merge. Merged records can't be unmerged.",
+    source: MERGE,
+    keyPhrases: [
+      "In the left panel, click the Actions dropdown menu, then select Merge",
+      "search for and select the record to merge into the primary record",
+      "it is not possible to unmerge them",
+    ],
+    lastVerified: "2026-10-28",
+  },
+  duplicateReviewView: {
+    text: "Once the file is imported with its Cleanup reason column, click Advanced filters and add Cleanup reason contains any of the check name (the text after the date in the CSV's Cleanup reason). Each record's Cleanup reason ends with its group number: records with the same number are the possible duplicates.",
+    source: CRITERIA,
+    keyPhrases: ["contains any of: for Text properties, enter your text"],
+    lastVerified: "2026-10-28",
+  },
+  confirmWithOwner: {
+    text: "Each owner opens the records in a group and decides whether they are the same person or company. If they are, merge them (next step). If not, clear their Cleanup reason so they drop out of the view.",
+    general: true,
     lastVerified: "2026-10-28",
   },
 
@@ -296,7 +336,7 @@ export const GUIDANCE = {
     lastVerified: "2026-10-28",
   },
   importNewProperty: {
-    text: "Companies and deals: map the Cleanup reason column with Create new property and name the property Cleanup reason.",
+    text: "Companies and deals, and duplicate files for any object: map the Cleanup reason column with Create new property and name the property Cleanup reason.",
     source: IMPORT,
     keyPhrases: ["Create a custom property: click Create new property, then set up your property in the right panel"],
     lastVerified: "2026-10-28",
@@ -357,14 +397,20 @@ export const CHECK_GUIDES: Record<string, CheckGuide> = {
     csv: "import",
     steps: ["fixEachEmail"],
   },
-  "contacts.duplicate-name-company": {
+  // High: merge-ready, in HubSpot's duplicate tool or from the record.
+  "contacts.duplicates-high": {
     csv: "import",
-    steps: ["duplicatesTool", "mergeRecords"],
+    steps: ["duplicatesTool", "duplicatesPlan", "mergeRecords", "mergeFromRecord"],
   },
-  "companies.duplicate-domain": {
+  "companies.duplicates-high": {
     csv: "import",
-    steps: ["duplicatesTool", "mergeRecords"],
+    steps: ["duplicatesTool", "duplicatesPlan", "mergeRecords", "mergeFromRecord"],
   },
+  // Medium and Low: each owner confirms before anything is merged.
+  "contacts.duplicates-medium": { csv: "import", steps: ["openIndex", "duplicateReviewView", "contactOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
+  "contacts.duplicates-low": { csv: "import", steps: ["openIndex", "duplicateReviewView", "contactOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
+  "companies.duplicates-medium": { csv: "import", steps: ["openIndex", "duplicateReviewView", "companyOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
+  "companies.duplicates-low": { csv: "import", steps: ["openIndex", "duplicateReviewView", "companyOwnerFilter", "saveView", "confirmWithOwner", "mergeFromRecord"] },
   "companies.no-contacts": {
     filter: [{ property: "numberOfAssociatedContacts", operator: "isEqualTo", value: "0" }],
     csv: "none",

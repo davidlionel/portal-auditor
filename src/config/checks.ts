@@ -15,6 +15,14 @@ export type ChecksConfig = {
     staleDealDays: number;
     typoDomains: string[];
   };
+  duplicates: {
+    sharedPhoneMin: number;
+    largeOrgMin: number;
+    blockMax: number;
+    maxGroupSize: number;
+    typoMinLength: number;
+    freeEmailDomains: string[];
+  };
 };
 
 // Thresholds for the audit checks. The reasoning for each value lives in
@@ -59,6 +67,32 @@ export const CHECKS_CONFIG: ChecksConfig = {
       "outlok.com",
       "outllook.com",
       "iclod.com",
+    ],
+  },
+  duplicates: {
+    // A phone number on this many contacts in the window is a shared line
+    // (a switchboard or a household), so it isn't a duplicate signal.
+    sharedPhoneMin: 5,
+    // A company name, email domain or company shared by this many contacts
+    // is a large organization: matching it alone can't make a match High.
+    largeOrgMin: 25,
+    // Groups of records sharing a key are compared pair by pair up to this
+    // size; larger ones only compare records with similar names.
+    blockMax: 50,
+    // Duplicate groups larger than this are reported as separate pairs.
+    maxGroupSize: 10,
+    // Names shorter than this only match exactly or as nicknames, not as typos.
+    typoMinLength: 5,
+    // Free and internet-provider email domains: people at different
+    // organizations share them, so they aren't a duplicate signal.
+    freeEmailDomains: [
+      "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "yahoo.ca", "yahoo.fr", "yahoo.de", "ymail.com",
+      "rocketmail.com", "hotmail.com", "hotmail.co.uk", "hotmail.fr", "outlook.com", "live.com", "msn.com",
+      "aol.com", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com", "pm.me", "gmx.com", "gmx.de",
+      "gmx.net", "web.de", "mail.com", "yandex.com", "yandex.ru", "mail.ru", "zoho.com", "qq.com", "163.com",
+      "126.com", "comcast.net", "verizon.net", "att.net", "sbcglobal.net", "cox.net", "charter.net",
+      "btinternet.com", "sky.com", "virginmedia.com", "orange.fr", "free.fr", "t-online.de", "shaw.ca",
+      "rogers.com", "bigpond.com", "optusnet.com.au", "fastmail.com", "hey.com", "tutanota.com",
     ],
   },
 };

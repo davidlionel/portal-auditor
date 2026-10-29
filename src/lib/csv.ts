@@ -1,4 +1,4 @@
-import { checkKey, type Finding } from "./checks/types";
+import { checkKey, type Finding, type WorkRecord } from "./checks/types";
 import type { ObjectType } from "./hubspot/properties";
 import { recordUrl } from "./hubspot/links";
 import type { ScanReport } from "./scan";
@@ -29,13 +29,14 @@ const OBJECT_LABELS: Record<ObjectType, string> = {
 };
 
 export const FINDINGS_HEADER = [
-  "Check", "Object", "Category", "Severity", "Count", "Affected", "Population", "Rate (%)", "Points recovered",
+  "Check", "Object", "Category", "Severity", "Count", "Affected", "Population", "Rate (%)", "Scored", "Points recovered",
   "Why it matters", "How to fix",
 ];
 export const WORK_LIST_HEADER = [
-  "Record ID", "Object type", "Check", "Severity", "Duplicate group", "HubSpot record link", "Capped", "Cleanup reason",
+  "Record ID", "Object type", "Check", "Severity", "Duplicate group", "Match signals", "HubSpot record link", "Capped",
+  "Cleanup reason",
 ];
-export const IMPORT_HEADER = ["Record ID", "Cleanup reason", "Duplicate group"];
+export const IMPORT_HEADER = ["Record ID", "Cleanup reason", "Duplicate group", "Match signals"];
 
 // File names, shared by the download buttons and the ZIP.
 const filePrefix = (report: ScanReport) => `portal-${report.portal.portalId}`;
@@ -58,6 +59,7 @@ export function findingsCsv(report: ScanReport): string {
       f.affected,
       f.population,
       +(checkRate(f) * 100).toFixed(2),
+      f.scored === false ? "no" : "yes",
       +(report.score.pointsRecovered[checkKey(f)] ?? 0).toFixed(1),
       f.why,
       f.fix,
@@ -69,9 +71,10 @@ export function findingsCsv(report: ScanReport): string {
 export const scanDay = (report: ScanReport) => report.scannedAt.slice(0, 10);
 
 // Prefilled text for a "Cleanup reason" property, so imported records can be
-// filtered by why they were flagged.
-export const cleanupReason = (report: ScanReport, finding: Finding) =>
-  `Portal audit ${scanDay(report)}: ${finding.title}`;
+// filtered by why they were flagged. Duplicates add their group number, so
+// an owner can find the other records in the group from HubSpot.
+export const cleanupReason = (report: ScanReport, finding: Finding, record?: WorkRecord) =>
+  `Portal audit ${scanDay(report)}: ${finding.title}${record?.group ? `, group ${record.group}` : ""}`;
 
 // Objects that have any records in the work list, in scan order.
 export function workListObjects(report: ScanReport): ObjectType[] {
@@ -100,9 +103,10 @@ export function workListCsv(
         f.title,
         f.severity,
         r.group ?? "",
+        r.signals ?? "",
         (recordLinks && recordUrl(report.portal, objectType, r.id)) || "",
         capped,
-        cleanupReason(report, f),
+        cleanupReason(report, f, r),
       ]);
     });
   return toCsv([WORK_LIST_HEADER, ...rows]);
@@ -115,12 +119,13 @@ export const importFileName = (finding: Finding) =>
 
 // One finding's records, one row per record, ready to import by Record ID
 // into a contact segment or a "Cleanup reason" property. Duplicate findings
-// keep the group number for review; it isn't meant to be imported.
+// keep the group number and match signals for review; they aren't meant to
+// be imported. A record in two low-confidence pairs keeps its first.
 export function importCsv(report: ScanReport, finding: Finding): string {
   const grouped = finding.records?.some((r) => r.group !== undefined) ?? false;
   const seen = new Set<string>();
   const rows = (finding.records ?? [])
     .filter((r) => !seen.has(r.id) && seen.add(r.id))
-    .map((r) => [r.id, cleanupReason(report, finding), ...(grouped ? [r.group ?? ""] : [])]);
+    .map((r) => [r.id, cleanupReason(report, finding, r), ...(grouped ? [r.group ?? "", r.signals ?? ""] : [])]);
   return toCsv([grouped ? IMPORT_HEADER : IMPORT_HEADER.slice(0, 2), ...rows]);
 }

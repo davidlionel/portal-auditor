@@ -5,7 +5,10 @@ import { SIZE_SMALL } from "@/lib/simulator/portal";
 import { simulatorTransport } from "@/lib/simulator/transport";
 
 // Record fields whose values must never reach a report, playbook or export.
-const RECORD_VALUE_FIELDS = ["firstname", "lastname", "email", "company", "domain"];
+const RECORD_VALUE_FIELDS = [
+  "firstname", "lastname", "email", "company", "phone", "mobilephone",
+  "domain", "name", "hs_additional_domains", "city", "state", "zip",
+];
 
 // A full scan of the small simulated portal, plus every record value
 // HubSpot (the simulator) sent back during it, for privacy checks.

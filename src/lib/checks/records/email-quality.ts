@@ -9,31 +9,38 @@ export const MALFORMED_EMAIL: CheckMeta = {
   severity: "medium",
 };
 
-// Emails that are badly formatted or use a typo domain like gmial.com.
-// Contacts with no email are counted separately, across the whole portal.
-export function checkMalformedEmails(
-  rows: SearchRow[],
-  config: ChecksConfig = CHECKS_CONFIG,
-): Finding[] {
-  const bad = rows.filter((row) => {
-    const email = row.properties.email;
-    return email ? emailProblem(email, config.records.typoDomains) !== null : false;
-  });
-  if (!bad.length) return [];
+// True for an email that is badly formatted or uses a typo domain like
+// gmial.com. Contacts with no email are counted separately, across the
+// whole portal.
+export function hasMalformedEmail(row: SearchRow, config: ChecksConfig = CHECKS_CONFIG): boolean {
+  const email = row.properties.email;
+  return email ? emailProblem(email, config.records.typoDomains) !== null : false;
+}
 
+// The finding for the contacts whose email failed, out of `population` read.
+export function malformedEmailFinding(ids: string[], population: number, config: ChecksConfig = CHECKS_CONFIG): Finding[] {
+  if (!ids.length) return [];
   return [
     {
       ...MALFORMED_EMAIL,
       category: CATEGORY_FOR_OBJECT.contacts,
       objectType: "contacts",
-      count: bad.length,
-      affected: bad.length,
-      population: rows.length,
+      count: ids.length,
+      affected: ids.length,
+      population,
       samples: [],
-      recordSamples: bad.slice(0, config.sampleCap).map((row) => [row.id]),
-      records: bad.slice(0, config.records.workListCap).map((row) => ({ id: row.id })),
+      recordSamples: ids.slice(0, config.sampleCap).map((id) => [id]),
+      records: ids.slice(0, config.records.workListCap).map((id) => ({ id })),
       why: "Emails to these addresses bounce, which hurts sender reputation, and the real person never hears from you.",
       fix: "Correct each address (gmial.com is almost always gmail.com), and add email validation to the forms that created them.",
     },
   ];
+}
+
+export function checkMalformedEmails(rows: SearchRow[], config: ChecksConfig = CHECKS_CONFIG): Finding[] {
+  return malformedEmailFinding(
+    rows.filter((row) => hasMalformedEmail(row, config)).map((row) => row.id),
+    rows.length,
+    config,
+  );
 }

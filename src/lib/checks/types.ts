@@ -4,8 +4,9 @@ export type Severity = "high" | "medium" | "low";
 
 export type Category = "Properties" | "Contacts" | "Companies" | "Deals";
 
-// One record in a finding's work list. Duplicates share a group number.
-export type WorkRecord = { id: string; group?: number };
+// One record in a finding's work list. Duplicates share a group number and
+// say which signals matched them ("same phone + nickname"), never the values.
+export type WorkRecord = { id: string; group?: number; signals?: string };
 
 export type Finding = {
   checkId: string;
@@ -30,22 +31,30 @@ export type Finding = {
   // Record checks: affected records for the work-list export, up to the
   // work-list cap. Fewer than `affected` means the list was capped.
   records?: WorkRecord[];
+  // Duplicate checks: the most common signal combinations and how many
+  // groups each matched.
+  matchSummary?: { signals: string; groups: number }[];
+  // False for checks that are reported but don't count toward the score
+  // (duplicates of medium or low confidence).
+  scored?: false;
   why: string;
   fix: string;
 };
 
 // Name and severity of a check, known before it runs, so checks that find
 // nothing or are skipped can still be listed and scored.
-export type CheckMeta = { checkId: string; title: string; severity: Severity };
+export type CheckMeta = { checkId: string; title: string; severity: Severity; scored?: false };
 
 // Every check the scan attempted, whether or not it found anything.
 // "scored" checks count toward the health score; "skipped" ones couldn't run
 // (missing scope or property, no records) and are left out and listed;
-// "empty" ones had nothing to look at (no custom dropdowns, say).
+// "empty" ones had nothing to look at (no custom dropdowns, say);
+// "unscored" ones ran and are reported but don't count (duplicates that
+// need confirming).
 export type CheckRun = CheckMeta & {
   category: Category;
   objectType: ObjectType;
-  status: "scored" | "skipped" | "empty";
+  status: "scored" | "skipped" | "empty" | "unscored";
   affected: number;
   population: number;
   reason?: string;

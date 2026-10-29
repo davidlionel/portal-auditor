@@ -30,14 +30,8 @@ import {
   countFinding,
   type CountCheck,
 } from "./checks/records/count-checks";
-import {
-  DUPLICATE_CONTACTS,
-  DUPLICATE_DOMAINS,
-  DUPLICATE_TOOL_PATH,
-  checkDuplicateContacts,
-  checkDuplicateDomains,
-} from "./checks/records/duplicates";
-import { MALFORMED_EMAIL, checkMalformedEmails } from "./checks/records/email-quality";
+import { DUPLICATE_METAS, DUPLICATE_TOOL_PATH, duplicateFindings } from "./checks/records/duplicates";
+import { MALFORMED_EMAIL, hasMalformedEmail, malformedEmailFinding } from "./checks/records/email-quality";
 import {
   CATEGORY_FOR_OBJECT,
   SEVERITY_RANK,
@@ -65,6 +59,8 @@ import {
 } from "./hubspot/search";
 import { limitMessage } from "./messages";
 import { createPacer, type Pacer } from "./pace";
+import { COMPANY_MATCH_PROPERTIES, COMPANY_OPTIONAL_PROPERTIES, CompanyStore, matchCompanies } from "./dedupe/companies";
+import { CONTACT_MATCH_PROPERTIES, CONTACT_OPTIONAL_PROPERTIES, ContactStore, matchContacts } from "./dedupe/contacts";
 import { createProgress, type Progress, type ProgressEvent } from "./progress";
 import { scoreChecks, type HealthScore } from "./scoring";
 
@@ -93,27 +89,78 @@ const PROPERTY_LIST_CHECKS = [
 ];
 
 // Checks that read field values from the recent-records window. Only these
-// fields are requested; values stay in memory for the scan and are never
+// fields are requested. Each page is reduced to matching keys as it arrives
+// and then dropped; the keys stay in memory for the scan only and are never
 // returned to the browser.
+type WindowCollector = {
+  add: (rows: SearchRow[]) => void;
+  finish: () => { findings: Finding[]; notes: string[] };
+};
+
 type WindowCheck = {
+  // Needed for the checks to run.
   properties: string[];
+  // Requested only when the portal's property list has them.
+  optional: string[];
   metas: CheckMeta[];
-  run: (rows: SearchRow[], config: ChecksConfig) => Finding[];
+  collect: (ctx: ScanContext) => WindowCollector;
+  // Contacts are matched after the company window is read, so they can use
+  // their companies' domains.
+  deferred?: boolean;
 };
 
 const WINDOW_CHECKS: Partial<Record<ObjectType, WindowCheck>> = {
   contacts: {
-    properties: ["firstname", "lastname", "company", "email"],
-    metas: [DUPLICATE_CONTACTS, MALFORMED_EMAIL],
-    run: (rows, config) => [
-      ...checkDuplicateContacts(rows, config),
-      ...checkMalformedEmails(rows, config),
-    ],
+    properties: CONTACT_MATCH_PROPERTIES,
+    optional: CONTACT_OPTIONAL_PROPERTIES,
+    metas: [...DUPLICATE_METAS.contacts, MALFORMED_EMAIL],
+    deferred: true,
+    collect: (ctx) => {
+      const { config } = ctx;
+      const store = new ContactStore(new Set(config.duplicates.freeEmailDomains));
+      const malformed: string[] = [];
+      return {
+        add: (rows) => {
+          for (const row of rows) {
+            store.add(row);
+            if (hasMalformedEmail(row, config)) malformed.push(row.id);
+          }
+        },
+        finish: () => {
+          const domains = ctx.companyDomains();
+          const result = matchContacts(store, config, (id) => domains.get(id) ?? 0);
+          const shared = result.sharedPhones;
+          return {
+            findings: [
+              ...duplicateFindings("contacts", result.matches, store.ids, config),
+              ...malformedEmailFinding(malformed, store.size, config),
+            ],
+            notes: shared
+              ? [
+                  `${fmt(shared)} phone ${shared === 1 ? "number is" : "numbers are"} shared by ${config.duplicates.sharedPhoneMin} or more contacts (a switchboard or household, say), so the duplicate checks don't count ${shared === 1 ? "it" : "them"} as a match.`,
+                ]
+              : [],
+          };
+        },
+      };
+    },
   },
   companies: {
-    properties: ["domain"],
-    metas: [DUPLICATE_DOMAINS],
-    run: (rows, config) => checkDuplicateDomains(rows, config),
+    properties: COMPANY_MATCH_PROPERTIES,
+    optional: COMPANY_OPTIONAL_PROPERTIES,
+    metas: DUPLICATE_METAS.companies,
+    collect: (ctx) => {
+      const store = new CompanyStore();
+      return {
+        add: (rows) => rows.forEach((row) => store.add(row)),
+        finish: () => {
+          const domains = store.domainById();
+          ctx.companyDomains = () => domains;
+          const { matches } = matchCompanies(store, ctx.config);
+          return { findings: duplicateFindings("companies", matches, store.ids, ctx.config), notes: [] };
+        },
+      };
+    },
   },
 };
 
@@ -165,7 +212,13 @@ type ScanContext = {
   progress: Progress;
   // Set once HubSpot's rate limit has run out: no more calls are made.
   stopped?: LimitKind;
+  // Company domains by company ID, once the company window is read.
+  companyDomains: () => Map<number, number>;
+  // Window checks that finish after every object is read.
+  deferred: (() => WindowResult)[];
 };
+
+type WindowResult = { findings: Finding[]; notes: string[]; runs: CheckRun[] };
 
 // What happens to a failed call: the key or the user ended the scan
 // ("abort"), HubSpot's limit ran out ("stop", keep what we have), or just
@@ -202,7 +255,7 @@ function ranCheck(
     ...meta,
     category,
     objectType,
-    status: population > 0 ? "scored" : "empty",
+    status: population === 0 ? "empty" : meta.scored === false ? "unscored" : "scored",
     affected: found?.affected ?? 0,
     population,
   };
@@ -371,38 +424,52 @@ async function runRecordChecks(ctx: ScanContext, setup: ObjectSetup): Promise<Ph
 
   const pages = pagesFor(Math.min(config.records.recordWindow, totalRecords));
   progress.phase(`Reading recent ${objectType} for duplicates`, `page 1 of ${pages}`);
+  const collector = windowCheck.collect(ctx);
   const window = await fetchRecentWindow(
     transport,
     tracker,
     pace,
     objectType,
-    windowCheck.properties,
+    [...windowCheck.properties, ...windowCheck.optional.filter((p) => propertyNames.has(p))],
     config.records.recordWindow,
-    { onPage: (fetched) => progress.detail(`page ${Math.min(pages, Math.ceil(fetched / 200) + 1)} of ${pages}`) },
+    {
+      onRows: collector.add,
+      onPage: (fetched) => progress.detail(`page ${Math.min(pages, Math.ceil(fetched / 200) + 1)} of ${pages}`),
+    },
   );
   if (!window.ok) {
     const outcome = classify(ctx, window.kind);
     if (outcome === "abort") return { abort: window.kind };
     return skipWindow(outcome === "stop" ? LIMIT_REASON : problemNote(window.kind, scope), outcome === "skip");
   }
-  const found = windowCheck.run(window.data, config);
-  findings.push(...found);
-  notes.push(...found.flatMap(cappedNote));
-  runs.push(
-    ...windowCheck.metas.map((meta) => ranCheck(meta, category, objectType, window.data.length, found)),
-  );
 
-  const covered = window.data.length;
-  const coverage =
-    covered >= totalRecords
-      ? `all ${fmt(totalRecords)} ${objectType}`
-      : `the ${fmt(covered)} most recently created of ${fmt(totalRecords)} ${objectType}`;
-  const tool = objectType === "contacts" || objectType === "companies"
-    ? ` HubSpot's own duplicate tool scans the whole portal: ${DUPLICATE_TOOL_PATH[objectType]}.`
-    : "";
-  notes.push(`${label} duplicate${objectType === "contacts" ? " and email" : ""} checks covered ${coverage}.${tool}`);
-
-  return { findings, notes, runs };
+  const covered = window.data;
+  const complete = (): WindowResult => {
+    const done = collector.finish();
+    const coverage =
+      covered >= totalRecords
+        ? `all ${fmt(totalRecords)} ${objectType}`
+        : `the ${fmt(covered)} most recently created of ${fmt(totalRecords)} ${objectType}`;
+    const tool =
+      objectType === "contacts" || objectType === "companies"
+        ? ` On Professional and Enterprise plans, HubSpot's Manage duplicates tool checks the whole portal: ${DUPLICATE_TOOL_PATH[objectType]}.`
+        : "";
+    return {
+      findings: done.findings,
+      notes: [
+        ...done.findings.flatMap(cappedNote),
+        `${label} duplicate${objectType === "contacts" ? " and email" : ""} checks covered ${coverage}.${tool}`,
+        ...done.notes,
+      ],
+      runs: windowCheck.metas.map((meta) => ranCheck(meta, category, objectType, covered, done.findings)),
+    };
+  };
+  if (windowCheck.deferred) {
+    ctx.deferred.push(complete);
+    return { findings, notes, runs };
+  }
+  const done = complete();
+  return { findings: [...findings, ...done.findings], notes: [...notes, ...done.notes], runs: [...runs, ...done.runs] };
 }
 
 export async function runScan(transport: Transport, options: ScanOptions = {}): Promise<ScanResult> {
@@ -426,6 +493,8 @@ export async function runScan(transport: Transport, options: ScanOptions = {}): 
     config,
     now: Date.now(),
     progress,
+    companyDomains: () => new Map(),
+    deferred: [],
   };
   const { pace } = ctx;
 
@@ -561,6 +630,14 @@ export async function runScan(transport: Transport, options: ScanOptions = {}): 
     findings.push(...records.findings);
     notes.push(...records.notes);
     runs.push(...records.runs);
+  }
+
+  // Contacts are matched once the company window is read.
+  for (const complete of ctx.deferred) {
+    const done = complete();
+    findings.push(...done.findings);
+    notes.push(...done.notes);
+    runs.push(...done.runs);
   }
 
   progress.phase("Scoring");
