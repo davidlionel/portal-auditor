@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { PRODUCT_NAME } from "@/config/product";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Portal Health Auditor",
-  description: "Read-only HubSpot portal health audit",
+  title: PRODUCT_NAME,
+  description: "A read-only health check for HubSpot portals",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

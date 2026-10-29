@@ -28,11 +28,17 @@ async function main() {
   results.push(["home page links to the sample report", homeHtml.includes('href="/demo"')]);
   results.push(["home page has no service-key field", !homeHtml.includes('name="token"')]);
   results.push(["home page has no simulated-scan button", !homeHtml.includes("Run simulated 250K scan")]);
+  const named = (html: string) => html.includes("<title>") && /<title>[^<]*Health Check for HubSpot<\/title>/.test(html) && !/Portal Health Auditor/.test(html);
+  const scoped = (html: string) => html.includes("never changes anything") && html.includes("cluttered properties");
+  results.push(["home page is named Health Check for HubSpot", named(homeHtml)]);
+  results.push(["home page says what it checks and doesn't", scoped(homeHtml)]);
 
   const demo = await fetch(`${BASE}/demo`);
   const demoHtml = await demo.text();
   results.push(["sample report loads", demo.ok]);
   results.push(["sample report shows a score", /out of 100/.test(demoHtml)]);
+  results.push(["sample report is named Health Check for HubSpot", named(demoHtml)]);
+  results.push(["sample report says what it checks and doesn't", scoped(demoHtml)]);
   results.push(["sample report shows the scan date banner", /Sample report[\s\S]*scanned on/.test(demoHtml)]);
   results.push(["sample report has no HubSpot record links", !/href="https:\/\/app[^"]*\/record\//.test(demoHtml)]);
   results.push(["sample report has CSV exports", demoHtml.includes("Findings summary (CSV)")]);

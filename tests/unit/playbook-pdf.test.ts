@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { extractText, getDocumentProxy } from "unpdf";
 import { CHECK_GUIDES, GUIDANCE } from "@/config/hubspot-guidance";
+import { PRODUCT_NAME } from "@/config/product";
 import { buildPlaybook, type Playbook } from "@/lib/playbook/build";
 import { COLUMN_NOTES } from "@/lib/playbook/files";
 import { INK, MUTED, PRINTABLE, RULE, TABLE_LAYOUTS, loadPdfmake, playbookDocument, printable, renderPlaybookPdf } from "@/lib/playbook/pdf";
@@ -43,6 +44,15 @@ describe("playbook PDF", () => {
     for (const c of playbook.categories) assert.ok(pdf.text.includes(`${c.category} ${c.score} / 100`), c.category);
     for (const f of playbook.topFixes) assert.ok(pdf.text.includes(`+${f.points.toFixed(1)} pts`), f.title);
     assert.ok(pdf.text.includes(`HubSpot steps verified against HubSpot's documentation on ${playbook.verifiedOn}.`));
+  });
+
+  it("names the product on the cover, in every footer and in the file's info", () => {
+    assert.ok(pdf.text.startsWith(`${PRODUCT_NAME} Cleanup playbook`));
+    const footers = pdf.text.split(`${PRODUCT_NAME} · Cleanup playbook · ${playbook.portal} · Page`).length - 1;
+    assert.equal(footers, pdf.pages);
+    const doc = playbookDocument(playbook) as { info: { creator: string } };
+    assert.equal(doc.info.creator, PRODUCT_NAME);
+    assert.doesNotMatch(pdf.text, /auditor/i);
   });
 
   it("has every section with its filter, CSV advice and source links", () => {

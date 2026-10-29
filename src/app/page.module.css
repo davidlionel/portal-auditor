@@ -410,3 +410,9 @@
   width: 100%;
   height: auto;
 }
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

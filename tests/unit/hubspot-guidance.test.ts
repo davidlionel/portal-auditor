@@ -96,8 +96,10 @@ describe("HubSpot guidance file", () => {
     assert.equal(steps.at(-1), "deleteContactsLastResort");
     assert.match(GUIDANCE.deleteContactsLastResort.text, /last resort/);
 
-    assert.ok(CHECK_GUIDES["contacts.customer-without-won-deal"].steps.includes("lifecycleBackward"));
-    assert.match(GUIDANCE.lifecycleBackward.text, /clear the value first/);
+    assert.deepEqual(CHECK_GUIDES["contacts.customer-without-won-deal"].steps.slice(-2), ["bulkEditLifecycleBackward", "lifecycleBackward"]);
+    assert.match(GUIDANCE.bulkEditLifecycleBackward.text, /Bulk edit can move a stage backward \(tested in a HubSpot portal on 29 Oct 2026\)/);
+    assert.doesNotMatch(GUIDANCE.bulkEditLifecycleBackward.text, /check/);
+    assert.match(GUIDANCE.lifecycleBackward.text, /^Imports, workflows and the API only move Lifecycle stage forward\..*clear the value first/);
   });
 });
 

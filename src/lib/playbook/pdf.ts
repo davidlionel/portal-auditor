@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@/config/product";
 import type { Playbook, Section, Step } from "./build";
 
 // Lays the playbook out as a pdfmake document. Plain black and white:
@@ -98,6 +99,7 @@ function sectionContent(s: Section): Content[] {
 
 function cover(p: Playbook): Content[] {
   return [
+    { text: PRODUCT_NAME, style: "label" },
     { text: "Cleanup playbook", style: "title" },
     { text: t(p.portal), style: "lead" },
     { text: `Scanned ${p.scanDate}`, style: "lead" },
@@ -127,7 +129,7 @@ function cover(p: Playbook): Content[] {
     heading("How to use this playbook", "h2", { margin: [0, 14, 0, 4] }),
     {
       text: t(
-        "Each numbered section below is one problem, biggest score gain first. It says what's wrong, why it matters, how to find and fix the records in HubSpot, and whether you need a CSV. Most problems need only a HubSpot filter. The CSVs come with this playbook in the ZIP download; Appendix A explains each one and Appendix B shows how to import one by Record ID. The auditor only reads your portal; every change here is one you make in HubSpot.",
+        "Each numbered section below is one problem, biggest score gain first. It says what's wrong, why it matters, how to find and fix the records in HubSpot, and whether you need a CSV. Most problems need only a HubSpot filter. The CSVs come with this playbook in the ZIP download; Appendix A explains each one and Appendix B shows how to import one by Record ID. The health check only reads your portal; every change here is one you make in HubSpot.",
       ),
     },
     { text: `HubSpot steps verified against HubSpot's documentation on ${p.verifiedOn}.`, bold: true, margin: [0, 10, 0, 0] },
@@ -160,7 +162,7 @@ function appendix(p: Playbook): Content[] {
     ]),
     heading("Appendix B: Importing a file by Record ID", "h1", { pageBreak: "before" }),
     {
-      text: "Imports write to your portal, unlike the auditor, so try one on a test portal or sandbox first. Remove the segment or Cleanup reason property when the cleanup is done.",
+      text: "Imports write to your portal, unlike the health check, so try one on a test portal or sandbox first. Remove the segment or Cleanup reason property when the cleanup is done.",
       margin: [0, 0, 0, 6],
     },
     { ol: p.importSteps.map(stepItem) },
@@ -173,7 +175,7 @@ export function playbookDocument(p: Playbook): Record<string, unknown> {
   return {
     pageSize: "LETTER",
     pageMargins: [54, 54, 54, 60],
-    info: { title: t(`Cleanup playbook: ${p.portal}`), creator: "Portal Health Auditor" },
+    info: { title: t(`Cleanup playbook: ${p.portal}`), creator: PRODUCT_NAME },
     defaultStyle: { font: "Roboto", fontSize: 10, lineHeight: 1.25, color: INK },
     styles: {
       title: { fontSize: 24, bold: true, margin: [0, 0, 0, 6] },
@@ -186,7 +188,7 @@ export function playbookDocument(p: Playbook): Record<string, unknown> {
       small: { fontSize: 8.5, color: MUTED },
     },
     footer: (page: number, pages: number) => ({
-      text: t(`Cleanup playbook · ${p.portal} · Page ${page} of ${pages}`),
+      text: t(`${PRODUCT_NAME} · Cleanup playbook · ${p.portal} · Page ${page} of ${pages}`),
       style: "small",
       alignment: "center",
       margin: [0, 24, 0, 0],

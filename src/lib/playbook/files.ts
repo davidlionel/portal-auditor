@@ -25,7 +25,7 @@ export type ExportFile = {
 // What each CSV column holds, for the appendix. A unit test checks every
 // header in csv.ts is described here.
 export const COLUMN_NOTES: Record<string, string> = {
-  Check: "The problem the auditor found.",
+  Check: "The problem the health check found.",
   Object: "Contacts, Companies or Deals.",
   Category: "Which part of the health score the check counts toward.",
   Severity: "high, medium or low.",

@@ -1,9 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import { PRODUCT_NAME } from "@/config/product";
 import { liveScanEnabled } from "@/lib/live-scan";
 import { simulatorEnabled } from "@/lib/simulator/guard";
 import { ConnectForm } from "./connect-form";
 import styles from "./page.module.css";
+import { ScopeSummary } from "./scope-summary";
 
 const RUN_LOCALLY_URL = "https://github.com/davidlionel/portal-auditor#run-it-on-your-own-portal";
 const PITCH = "A health check for HubSpot portals: a score out of 100 and the five fixes that matter most.";
@@ -59,7 +61,8 @@ export default function Home() {
     return (
       <main className={styles.main}>
         <header className={styles.header}>
-          <h1>Portal Health Auditor</h1>
+          <h1>{PRODUCT_NAME}</h1>
+          <ScopeSummary />
           <p className={styles.pitch}>{PITCH}</p>
         </header>
         <ConnectForm liveScan simulatorAvailable={simulator}>
@@ -77,7 +80,8 @@ export default function Home() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <h1>Portal Health Auditor</h1>
+        <h1>{PRODUCT_NAME}</h1>
+          <ScopeSummary />
         <p className={styles.pitch}>{PITCH}</p>
       </header>
 

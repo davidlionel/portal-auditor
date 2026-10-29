@@ -99,8 +99,13 @@ export const GUIDANCE = {
     general: true,
     lastVerified: "2026-10-28",
   },
+  bulkEditLifecycleBackward: {
+    text: "If a contact isn't really a customer, move it back to the right stage: select the contacts, click Edit, choose Lifecycle stage, pick the stage (such as Lead) and click Update. Bulk edit can move a stage backward (tested in a HubSpot portal on 29 Oct 2026).",
+    general: true,
+    lastVerified: "2026-10-29",
+  },
   lifecycleBackward: {
-    text: "If a contact isn't really a customer, move it to an earlier stage. HubSpot tools only move Lifecycle stage forward, so clear the value first, by hand on the record or with a workflow, then set the earlier stage. HubSpot's docs don't say whether bulk edit (select, then Edit) can move a stage backward, so after a bulk update, open a few records to check the stage changed.",
+    text: "Imports, workflows and the API only move Lifecycle stage forward. To set an earlier stage with one of them, clear the value first.",
     source: LIFECYCLE,
     keyPhrases: [
       "can only be moved forward by HubSpot tools",
@@ -145,7 +150,7 @@ export const GUIDANCE = {
     lastVerified: "2026-10-28",
   },
   duplicatesPlan: {
-    text: "Manage duplicates needs a Professional or Enterprise subscription. On Free and Starter portals, the auditor's groups are your duplicate check: merge them from the record (next step). On higher plans, use each group's match signals and confidence alongside HubSpot's own list.",
+    text: "Manage duplicates needs a Professional or Enterprise subscription. On Free and Starter portals, the health check's groups are your duplicate check: merge them from the record (next step). On higher plans, use each group's match signals and confidence alongside HubSpot's own list.",
     source: DUPLICATES,
     keyPhrases: ["A Professional or Enterprise subscription is required to manage individual duplicates"],
     lastVerified: "2026-10-28",
@@ -412,7 +417,7 @@ export const CHECK_GUIDES: Record<string, CheckGuide> = {
       { property: "recentDealCloseDate", operator: "isUnknown" },
     ],
     csv: "none",
-    steps: ["openIndex", "advancedFilters", "saveView", "associateDeal", "lifecycleBackward"],
+    steps: ["openIndex", "advancedFilters", "saveView", "associateDeal", "bulkEditLifecycleBackward", "lifecycleBackward"],
   },
   "contacts.missing-email": {
     filter: [{ property: "email", operator: "isUnknown" }],

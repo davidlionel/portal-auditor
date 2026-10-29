@@ -1,4 +1,4 @@
-# Portal Health Auditor
+# Health Check for HubSpot
 
 **Live demo: [portal-auditor-two.vercel.app](https://portal-auditor-two.vercel.app/)** · [Sample report](https://portal-auditor-two.vercel.app/demo)
 
@@ -86,7 +86,7 @@ After a scan, and on the sample report, **Download playbook (PDF)** gives a step
 
 ### Where the HubSpot steps come from
 
-Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (correcting mistyped emails, finding missing emails before deleting contacts, reviewing stale deals with their owners, owners confirming possible duplicates) is marked `general` and labelled "General guidance" in the PDF.
+Every menu path, filter name and fix step lives in one file, `src/config/hubspot-guidance.ts`. Each entry has its HubSpot knowledge-base URL, short verbatim key phrases from that page, and a `lastVerified` date. Advice HubSpot's docs don't cover (correcting mistyped emails, finding missing emails before deleting contacts, moving lifecycle stage backward with bulk edit (tested in a HubSpot portal on 29 Oct 2026), reviewing stale deals with their owners, owners confirming possible duplicates) is marked `general` and labelled "General guidance" in the PDF.
 
 - `npm run check:hubspot-docs` fetches every source page, fails any that redirect, return an error or no longer contain their key phrases, and always exits 0.
 - A weekly GitHub Action (`.github/workflows/hubspot-docs.yml`, Mondays, or run it from the Actions tab) runs the same check and opens one issue labelled `hubspot-docs` listing anything that failed, or comments on the open one. It never fails a build or a deploy.
@@ -106,7 +106,7 @@ Count checks page through the matching records during the scan, 200 per call, up
 
 ## Using the work list in HubSpot
 
-HubSpot can import the work list by Record ID to find or tag these records. Imports write to the portal, unlike the auditor, so try it on a test portal first. Steps, per HubSpot's [import guide](https://knowledge.hubspot.com/import-and-export/import-records-for-a-single-object):
+HubSpot can import the work list by Record ID to find or tag these records. Imports write to the portal, unlike the health check, so try it on a test portal first. Steps, per HubSpot's [import guide](https://knowledge.hubspot.com/import-and-export/import-records-for-a-single-object):
 
 1. Go to **Data Management > Data Integration** and start an import, or click **Import** on the contacts, companies or deals index page. Import one object's file at a time.
 2. Map the **Record ID** column to the **Record ID** property. Record ID takes priority over other identifiers such as email or domain.
