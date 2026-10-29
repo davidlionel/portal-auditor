@@ -1,7 +1,7 @@
 import styles from "./page.module.css";
 
-// What the scan covers and what it doesn't, under the main heading on the
-// home page and /demo.
+// What the scan covers and what it doesn't: under the key form or the sample
+// report button on the home page, and under the heading on /demo.
 export function ScopeSummary() {
   return (
     <div className={styles.scope}>

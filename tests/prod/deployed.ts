@@ -32,6 +32,10 @@ async function main() {
   const scoped = (html: string) => html.includes("never changes anything") && html.includes("cluttered properties");
   results.push(["home page is named Health Check for HubSpot", named(homeHtml)]);
   results.push(["home page says what it checks and doesn't", scoped(homeHtml)]);
+  results.push([
+    "home page puts it under the View sample report button",
+    homeHtml.indexOf("View sample report") >= 0 && homeHtml.indexOf("View sample report") < homeHtml.indexOf("cluttered properties"),
+  ]);
 
   const demo = await fetch(`${BASE}/demo`);
   const demoHtml = await demo.text();
