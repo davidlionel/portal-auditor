@@ -64,8 +64,7 @@ export default function Home() {
           <h1>{PRODUCT_NAME}</h1>
           <p className={styles.pitch}>{PITCH}</p>
         </header>
-        <ConnectForm liveScan simulatorAvailable={simulator}>
-          <ScopeSummary />
+        <ConnectForm liveScan simulatorAvailable={simulator} after={<ScopeSummary />}>
           <ScopesHelp />
           <p className={styles.note}>
             <Link className={styles.recordLink} href="/demo">
@@ -118,13 +117,14 @@ export default function Home() {
             View sample report
           </Link>
         </div>
-        <ScopeSummary />
         <p className={`${styles.note} ${styles.exportNote}`}>
           This site shows the sample only and never asks for a service key. To scan your own
           portal, <a className={styles.recordLink} href={RUN_LOCALLY_URL}>run it on your machine</a>;
           it takes a few minutes to set up.
         </p>
       </section>
+
+      <ScopeSummary />
 
       {simulator && <ConnectForm liveScan={false} simulatorAvailable />}
     </main>

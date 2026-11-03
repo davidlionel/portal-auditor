@@ -18,15 +18,18 @@ type ScanState =
 // Both flags are decided on the server. `liveScan` shows the key field;
 // `simulatorAvailable` shows the dev-only simulated scan, whose code never
 // reaches the browser: the button only asks the server to run it. `children`
-// go at the bottom of the form card, under the key field.
+// go at the bottom of the form card, under the key field; `after` sits just
+// below the card, above any progress or report.
 export function ConnectForm({
   liveScan,
   simulatorAvailable,
   children,
+  after,
 }: {
   liveScan: boolean;
   simulatorAvailable: boolean;
   children?: ReactNode;
+  after?: ReactNode;
 }) {
   const [state, setState] = useState<ScanState>({ status: "idle" });
   // Set when a scan starts; reading the clock during render breaks prerendering.
@@ -143,6 +146,8 @@ export function ConnectForm({
         )}
         {children}
       </form>
+
+      {after}
 
       {state.status === "running" && (
         <ProgressCard
