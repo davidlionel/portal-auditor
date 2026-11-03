@@ -96,12 +96,12 @@ describe("scoreChecks", () => {
   });
 
   it("weights categories by the config", () => {
-    // Contacts 0 (weight 35), Deals 100 (weight 25): 100 × 25 ÷ 60.
+    // Contacts 0 (weight 30), Deals 100 (weight 25): 100 × 25 ÷ 55.
     const score = scoreChecks([
       run({ checkId: "a", severity: "high", affected: 100, population: 1000 }),
       run({ checkId: "b", category: "Deals" }),
     ]);
-    assert.ok(Math.abs(score.overall! - (100 * 25) / 60) < 1e-9);
+    assert.ok(Math.abs(score.overall! - (100 * 25) / 55) < 1e-9);
   });
 
   it("doesn't count skipped checks against their category", () => {
@@ -202,7 +202,7 @@ describe("scoreExplanation", () => {
   it("states the zero-points and weights from the config", () => {
     const text = scoreExplanation();
     assert.match(text, /10% \(high\), 25% \(medium\) or 50% \(low\)/);
-    assert.match(text, /Contacts 35, Deals 25, Companies 20, Properties 20/);
+    assert.match(text, /Contacts 30, Deals 25, Companies 20, Properties 15, Segments 10/);
     assert.match(text, /3:2:1/);
   });
 

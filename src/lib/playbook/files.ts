@@ -4,6 +4,9 @@ import {
   cleanupReason,
   findingsCsv,
   findingsFileName,
+  hasSegmentRows,
+  segmentsCsv,
+  segmentsFileName,
   importCsv,
   importFileName,
   workListCsv,
@@ -14,7 +17,7 @@ import type { ScanReport } from "../scan";
 
 export type ExportFile = {
   path: string;
-  kind: "findings" | "work-list" | "import";
+  kind: "findings" | "work-list" | "segments" | "import";
   // One line for the playbook's appendix.
   description: string;
   // A real Cleanup reason value from this file, for the appendix.
@@ -44,6 +47,10 @@ export const COLUMN_NOTES: Record<string, string> = {
   "HubSpot record link": "Opens the record in HubSpot (blank in the sample, whose portal you can't log in to).",
   Capped: 'Filled when the check matched more records than the file lists, e.g. "first 1,000 of 4,512". Use the HubSpot filter for the full set.',
   "Cleanup reason": "Why the record is listed. Import it into a Cleanup reason property to filter on later.",
+  "Segment ID": "HubSpot's ID for the segment (the ILS Segment ID in the segment's Details).",
+  "Segment name": "The segment's name in HubSpot.",
+  "Same-name group": "Segments with the same number have the same name.",
+  Detail: 'What\'s wrong with the segment, e.g. "static" for an empty static segment, or the archived or missing property its filters use.',
 };
 
 // The Cleanup reason note with an example taken from the file itself.
@@ -78,6 +85,16 @@ export function exportFiles(report: ScanReport, { sample = false }: { sample?: b
         content: workListCsv(report, objectType, { recordLinks: !sample }),
       };
     }),
+    ...(hasSegmentRows(report)
+      ? [
+          {
+            path: segmentsFileName(report),
+            kind: "segments" as const,
+            description: "Every flagged segment, with its ID and name, one row per segment per check.",
+            content: segmentsCsv(report),
+          },
+        ]
+      : []),
     ...importFindings(report).map((finding) => ({
       path: importFileName(finding),
       kind: "import" as const,

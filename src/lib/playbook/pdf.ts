@@ -82,11 +82,11 @@ function sectionContent(s: Section): Content[] {
     ...(s.prevent.length ? [heading("Stop it coming back", "h3"), { ul: s.prevent.map(stepItem) }] : []),
     ...(items.length
       ? [
-          heading(s.category === "Properties" ? "Properties to fix" : "Items", "h3"),
+          heading(s.category === "Properties" ? "Properties to fix" : s.category === "Segments" ? "Segments to fix" : "Items", "h3"),
           { ul: items.map((i) => i.text), style: "small" },
           ...(s.itemsNote ? [{ text: t(s.itemsNote), style: "small", margin: [0, 2, 0, 0] }] : []),
           ...(itemsChanged
-            ? [{ text: "Some labels use characters this PDF can't show; they appear as ?. Check them in HubSpot.", style: "small", margin: [0, 2, 0, 0] }]
+            ? [{ text: "Some labels or names use characters this PDF can't show; they appear as ?. Check them in HubSpot.", style: "small", margin: [0, 2, 0, 0] }]
             : []),
         ]
       : []),

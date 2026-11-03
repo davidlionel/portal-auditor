@@ -1,4 +1,4 @@
-import { checkKey, type Finding, type WorkRecord } from "./checks/types";
+import { checkKey, type CheckObject, type Finding, type WorkRecord } from "./checks/types";
 import type { ObjectType } from "./hubspot/properties";
 import { recordUrl } from "./hubspot/links";
 import type { ScanReport } from "./scan";
@@ -22,10 +22,11 @@ export function toCsv(rows: Cell[][]): string {
   return "﻿" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
-const OBJECT_LABELS: Record<ObjectType, string> = {
+const OBJECT_LABELS: Record<CheckObject, string> = {
   contacts: "Contacts",
   companies: "Companies",
   deals: "Deals",
+  segments: "Segments",
 };
 
 export const FINDINGS_HEADER = [
@@ -37,12 +38,14 @@ export const WORK_LIST_HEADER = [
   "Cleanup reason",
 ];
 export const IMPORT_HEADER = ["Record ID", "Cleanup reason", "Duplicate group", "Match signals"];
+export const SEGMENTS_HEADER = ["Segment ID", "Segment name", "Check", "Severity", "Same-name group", "Detail"];
 
 // File names, shared by the download buttons and the ZIP.
 const filePrefix = (report: ScanReport) => `portal-${report.portal.portalId}`;
 export const findingsFileName = (report: ScanReport) => `${filePrefix(report)}-findings.csv`;
 export const workListFileName = (report: ScanReport, objectType: ObjectType) =>
   `${filePrefix(report)}-work-list-${objectType}.csv`;
+export const segmentsFileName = (report: ScanReport) => `${filePrefix(report)}-segments.csv`;
 export const playbookFileName = (report: ScanReport) => `${filePrefix(report)}-playbook.pdf`;
 export const zipFileName = (report: ScanReport) => `${filePrefix(report)}-cleanup.zip`;
 
@@ -110,6 +113,18 @@ export function workListCsv(
       ]);
     });
   return toCsv([WORK_LIST_HEADER, ...rows]);
+}
+
+// True when a segment check flagged any segments.
+export const hasSegmentRows = (report: ScanReport) => report.findings.some((f) => f.segments?.length);
+
+// Every flagged segment, one row per segment per check. Segment names are
+// configuration, like property labels, so they're included.
+export function segmentsCsv(report: ScanReport): string {
+  const rows = report.findings.flatMap((f) =>
+    (f.segments ?? []).map((s) => [s.id, s.name, f.title, f.severity, s.group ?? "", s.detail ?? ""]),
+  );
+  return toCsv([SEGMENTS_HEADER, ...rows]);
 }
 
 // Where a finding's import file sits in the ZIP, e.g.

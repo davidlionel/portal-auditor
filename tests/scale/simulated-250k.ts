@@ -1,8 +1,12 @@
 // Scale test: a full scan of the simulated 250K-contact portal through the
 // real /api/scan handler, with real pacing, HubSpot-like latency and
-// injected 429s. Takes about two minutes. Run with: npm run test:scale
+// injected 429s, then the segment checks alone at 50, 500 and 5,000
+// segments. Takes about three minutes. Run with: npm run test:scale
+import { CHECKS_CONFIG } from "@/config/checks";
+import type { Transport } from "@/lib/hubspot/client";
+import { runScan } from "@/lib/scan";
 import { handleScanRequest, type ScanStreamEvent } from "@/lib/scan-stream";
-import { SIZE_250K } from "@/lib/simulator/portal";
+import { SIZE_250K, SIZE_SMALL } from "@/lib/simulator/portal";
 import { simulatorTransport, type SimulatorStats } from "@/lib/simulator/transport";
 
 // The README's estimate before this test existed.
@@ -53,6 +57,36 @@ function memorySampler() {
       maxRssMb: (maxRss - base.rss) / 2 ** 20,
       gc: Boolean((globalThis as { gc?: unknown }).gc),
     };
+  };
+}
+
+// The segment checks' cost at one portal size: calls to the segments API and
+// property lookups, and the time from "Reading segments" to the end of the
+// scan. Records are the small portal's, so the segments phase is all that's
+// measured; calls use simulated HubSpot response times.
+async function segmentCost(segments: number) {
+  const sim = simulatorTransport({ size: { ...SIZE_SMALL, segments }, latency: true, rateLimits: "none", seed: 3 }).transport;
+  let calls = 0;
+  const counted: Transport = (req) => {
+    if (req.path.startsWith("/crm/lists/") || /\/crm\/properties\/[^/]+\/[^/]+\/[^/?]+\?/.test(req.path)) calls++;
+    return sim(req);
+  };
+  let startedAt = 0;
+  const result = await runScan(counted, {
+    config: { ...CHECKS_CONFIG, searchMinIntervalMs: 0 },
+    onProgress: (e) => {
+      if (!startedAt && e.phase === "Reading segments") startedAt = performance.now();
+    },
+  });
+  if (!result.ok) throw new Error(result.kind);
+  const count = (id: string) => result.report.findings.find((f) => f.checkId === id)?.count ?? 0;
+  return {
+    segments,
+    calls,
+    seconds: (performance.now() - startedAt) / 1000,
+    empty: count("segments.empty"),
+    duplicates: count("segments.duplicate-names"),
+    missing: count("segments.filters-missing-property"),
   };
 }
 
@@ -124,6 +158,11 @@ async function main() {
   const halfway = progress.find((p) => p.at >= (seconds * 1000) / 2)?.percent ?? 0;
   const afterSetup = progress.find((p) => p.phase !== "Reading portal setup")?.percent ?? 100;
 
+  const costs = [];
+  for (const n of [50, 500, 5_000]) costs.push(await segmentCost(n));
+  // Planted (see simSegment in src/lib/simulator/portal.ts).
+  const at500 = costs[1];
+
   const checks = [
     ["progress never jumps more than 10 points", biggestJump <= 10],
     ["progress is 30–70% halfway through the scan", halfway >= 30 && halfway <= 70],
@@ -141,6 +180,10 @@ async function main() {
     ["company duplicates: 221 High, 200 Medium, 40 Low", groups("companies.duplicates-high") === 221 && groups("companies.duplicates-medium") === 200 && groups("companies.duplicates-low") === 40],
     ["only High duplicates are scored", report.checks.filter((c) => /duplicates-(medium|low)/.test(c.checkId)).every((c) => c.status === "unscored")],
     ["the switchboard number is set aside", report.notes.some((n) => /1 phone number is shared/.test(n))],
+    ["segments: 38 empty, 10 duplicate names, 10 filtering on missing properties", groups("segments.empty") === 38 && groups("segments.duplicate-names") === 10 && groups("segments.filters-missing-property") === 10],
+    ["the sensitive property is noted, not flagged", report.notes.some((n) => /couldn't verify 1 property/.test(n))],
+    ["the segments-only scans find the same at 500", at500.empty === 38 && at500.duplicates === 10 && at500.missing === 10],
+    ["segment calls: pages of 500 + active ÷ 100 + 6 property lookups", costs.every((c) => c.calls === Math.ceil(c.segments / 500) + Math.ceil(c.segments / 2 / 100) + 6)],
     ["key never in the stream", !raw.includes("SCALETESTKEY")],
     ["key never in the logs", logs.every((l) => !l.includes("SCALETESTKEY"))],
   ] as const;
@@ -160,6 +203,9 @@ async function main() {
   console.log("\n| Phase | Starts at | Percent at start |");
   console.log("|---|---|---|");
   for (const p of phases) console.log(`| ${p.phase} | ${(p.start / 1000).toFixed(1)} s | ${p.percent}% |`);
+  console.log("\n| Segments | Calls | Time |");
+  console.log("|---|---|---|");
+  for (const c of costs) console.log(`| ${c.segments.toLocaleString("en-US")} | ${c.calls} | ${c.seconds.toFixed(1)} s |`);
   console.log("\nChecks:");
   for (const [name, passed] of checks) console.log(`  ${passed ? "PASS" : "FAIL"}  ${name}`);
   if (checks.some(([, passed]) => !passed)) process.exitCode = 1;

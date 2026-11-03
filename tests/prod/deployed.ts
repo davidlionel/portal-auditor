@@ -29,7 +29,11 @@ async function main() {
   results.push(["home page has no service-key field", !homeHtml.includes('name="token"')]);
   results.push(["home page has no simulated-scan button", !homeHtml.includes("Run simulated 250K scan")]);
   const named = (html: string) => html.includes("<title>") && /<title>[^<]*Health Check for HubSpot<\/title>/.test(html) && !/Portal Health Auditor/.test(html);
-  const scoped = (html: string) => html.includes("never changes anything") && html.includes("cluttered properties");
+  const scoped = (html: string) =>
+    html.includes("never changes anything") &&
+    html.includes("cluttered properties") &&
+    html.includes("segments (lists) that are empty") &&
+    !html.includes("workflows, lists,");
   results.push(["home page is named Health Check for HubSpot", named(homeHtml)]);
   results.push(["home page says what it checks and doesn't", scoped(homeHtml)]);
   // Below the sample report card, not inside it.
@@ -48,6 +52,7 @@ async function main() {
   results.push(["sample report says what it checks and doesn't", scoped(demoHtml)]);
   results.push(["sample report shows the scan date banner", /Sample report[\s\S]*scanned on/.test(demoHtml)]);
   results.push(["sample report has no HubSpot record links", !/href="https:\/\/app[^"]*\/record\//.test(demoHtml)]);
+  results.push(["sample report has a Segments score", /Segments/.test(demoHtml) && demoHtml.includes("Workflows aren&#x27;t checked")]);
   results.push(["sample report has CSV exports", demoHtml.includes("Findings summary (CSV)")]);
   results.push([
     "sample report has the playbook and ZIP buttons",

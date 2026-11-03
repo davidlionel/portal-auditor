@@ -4,7 +4,10 @@ import { useState } from "react";
 import {
   findingsCsv,
   findingsFileName,
+  hasSegmentRows,
   playbookFileName,
+  segmentsCsv,
+  segmentsFileName,
   workListCsv,
   workListFileName,
   workListObjects,
@@ -87,6 +90,15 @@ export function ExportButtons({ report, sample = false }: { report: ScanReport; 
         >
           Findings summary (CSV)
         </button>
+        {hasSegmentRows(report) && (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => download(segmentsFileName(report), segmentsCsv(report), CSV)}
+          >
+            Segments (CSV)
+          </button>
+        )}
         {workListObjects(report).map((objectType) => (
           <button
             key={objectType}
@@ -101,7 +113,7 @@ export function ExportButtons({ report, sample = false }: { report: ScanReport; 
       <p className={`${styles.note} ${styles.exportNote}`}>
         Files are built in your browser from this report; nothing is stored. Work lists hold
         record IDs, HubSpot links and a cleanup reason, one file per object, ready to import by
-        Record ID.
+        Record ID. The segments file lists flagged segments by ID and name.
         {sample && " In the sample, the link column is left blank."}
       </p>
     </div>

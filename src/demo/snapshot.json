@@ -1,8 +1,8 @@
 {
-  "scannedAt": "2026-10-29T01:34:11.502Z",
+  "scannedAt": "2026-11-03T23:32:34.989Z",
   "appVersion": "0.1.0",
   "report": {
-    "scannedAt": "2026-10-29T01:34:11.498Z",
+    "scannedAt": "2026-11-03T23:32:34.986Z",
     "portal": {
       "portalId": 247313672,
       "accountType": "DEVELOPER_TEST",
@@ -18,7 +18,8 @@
     ],
     "notes": [
       "Companies duplicate checks covered all 139 companies. On Professional and Enterprise plans, HubSpot's Manage duplicates tool checks the whole portal: CRM > Companies, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
-      "Contacts duplicate and email checks covered all 222 contacts. On Professional and Enterprise plans, HubSpot's Manage duplicates tool checks the whole portal: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates)."
+      "Contacts duplicate and email checks covered all 222 contacts. On Professional and Enterprise plans, HubSpot's Manage duplicates tool checks the whole portal: CRM > Contacts, then the three vertical dots icon > Manage duplicates (or Data Management > Data Quality > Manage Duplicates).",
+      "Segment checks covered all 10 segments (4 active)."
     ],
     "findings": [
       {
@@ -974,17 +975,11 @@
         "severity": "medium",
         "category": "Contacts",
         "objectType": "contacts",
-        "count": 35,
-        "affected": 35,
-        "population": 66,
+        "count": 33,
+        "affected": 33,
+        "population": 64,
         "samples": [],
         "recordSamples": [
-          [
-            "579375740605"
-          ],
-          [
-            "578832944889"
-          ],
           [
             "551325605603"
           ],
@@ -1008,15 +1003,15 @@
           ],
           [
             "551526679257"
+          ],
+          [
+            "551526679259"
+          ],
+          [
+            "551526679261"
           ]
         ],
         "records": [
-          {
-            "id": "579375740605"
-          },
-          {
-            "id": "578832944889"
-          },
           {
             "id": "551325605603"
           },
@@ -1541,6 +1536,36 @@
         ],
         "why": "Without a description, users guess what a field means and fill it inconsistently.",
         "fix": "Add a one-line description to each property saying what it holds and who fills it."
+      },
+      {
+        "checkId": "segments.duplicate-names",
+        "title": "Segments with the same name",
+        "severity": "low",
+        "category": "Segments",
+        "objectType": "segments",
+        "count": 1,
+        "affected": 2,
+        "population": 10,
+        "samples": [
+          "76 \"Trade Show Leads\" / 77 \"Trade show leads!\""
+        ],
+        "items": [
+          "76 \"Trade Show Leads\" / 77 \"Trade show leads!\""
+        ],
+        "segments": [
+          {
+            "id": "76",
+            "name": "Trade Show Leads",
+            "group": 1
+          },
+          {
+            "id": "77",
+            "name": "Trade show leads!",
+            "group": 1
+          }
+        ],
+        "why": "Segments with the same name make it easy to pick the wrong one for an email, workflow or report.",
+        "fix": "Compare each pair's filters and where each is used, keep one, then rename or delete the other."
       }
     ],
     "checks": [
@@ -1621,8 +1646,8 @@
         "category": "Contacts",
         "objectType": "contacts",
         "status": "scored",
-        "affected": 35,
-        "population": 66
+        "affected": 33,
+        "population": 64
       },
       {
         "checkId": "contacts.missing-email",
@@ -1867,10 +1892,40 @@
         "status": "scored",
         "affected": 2,
         "population": 222
+      },
+      {
+        "checkId": "segments.empty",
+        "title": "Empty segments",
+        "severity": "low",
+        "category": "Segments",
+        "objectType": "segments",
+        "status": "scored",
+        "affected": 0,
+        "population": 1
+      },
+      {
+        "checkId": "segments.duplicate-names",
+        "title": "Segments with the same name",
+        "severity": "low",
+        "category": "Segments",
+        "objectType": "segments",
+        "status": "scored",
+        "affected": 2,
+        "population": 10
+      },
+      {
+        "checkId": "segments.filters-missing-property",
+        "title": "Active segments that filter on archived or missing properties",
+        "severity": "medium",
+        "category": "Segments",
+        "objectType": "segments",
+        "status": "scored",
+        "affected": 0,
+        "population": 4
       }
     ],
     "score": {
-      "overall": 55.60080962958662,
+      "overall": 57.406569935346916,
       "categories": [
         {
           "category": "Properties",
@@ -1895,31 +1950,38 @@
           "score": 33.5064935064935,
           "scored": 3,
           "skipped": 0
+        },
+        {
+          "category": "Segments",
+          "score": 90,
+          "scored": 3,
+          "skipped": 0
         }
       ],
       "pointsRecovered": {
-        "properties.no-description:contacts": 0.556,
-        "properties.duplicate-labels:contacts": 1.111,
-        "properties.dropdown-variants:contacts": 1.667,
-        "properties.near-zero-fill:contacts": 1.111,
-        "contacts.missing-lifecycle-stage:contacts": 0.344,
-        "contacts.customer-without-won-deal:contacts": 6.364,
-        "contacts.missing-email:contacts": 1.261,
-        "properties.no-description:companies": 0.556,
+        "properties.no-description:contacts": 0.417,
+        "properties.duplicate-labels:contacts": 0.833,
+        "properties.dropdown-variants:contacts": 1.25,
+        "properties.near-zero-fill:contacts": 0.833,
+        "contacts.missing-lifecycle-stage:contacts": 0.295,
+        "contacts.customer-without-won-deal:contacts": 5.455,
+        "contacts.missing-email:contacts": 1.081,
+        "properties.no-description:companies": 0.417,
         "companies.no-contacts:companies": 1.511,
         "companies.duplicates-high:companies": 10.791,
-        "properties.no-description:deals": 0.556,
+        "properties.no-description:deals": 0.417,
         "deals.missing-amount:deals": 2.338,
         "deals.missing-close-date:deals": 7.143,
         "deals.stale:deals": 7.143,
-        "contacts.duplicates-high:contacts": 1.72,
-        "contacts.malformed-email:contacts": 0.229
+        "contacts.duplicates-high:contacts": 1.474,
+        "contacts.malformed-email:contacts": 0.197,
+        "segments.duplicate-names:segments": 1
       },
-      "explanation": "Each check loses points in proportion to the share of records or properties it flags, reaching zero at 10% (high), 25% (medium) or 50% (low); categories average their checks weighted 3:2:1 by severity, and the total weights Contacts 35, Deals 25, Companies 20, Properties 20. Skipped checks don't count."
+      "explanation": "Each check loses points in proportion to the share of records or properties it flags, reaching zero at 10% (high), 25% (medium) or 50% (low); categories average their checks weighted 3:2:1 by severity, and the total weights Contacts 30, Deals 25, Companies 20, Properties 15, Segments 10. Skipped checks don't count."
     },
-    "apiCalls": 30,
+    "apiCalls": 32,
     "retries": 0,
-    "durationMs": 8532,
+    "durationMs": 8621,
     "simulated": false
   }
 }

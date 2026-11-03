@@ -35,7 +35,7 @@ describe("buildPlaybook: cover", () => {
     assert.match(playbook.portal, new RegExp(`Hub ID ${report.portal.portalId}`));
     assert.equal(playbook.scanDate, longDate(report.scannedAt));
     assert.equal(playbook.overall, Math.round(report.score.overall!));
-    assert.deepEqual(playbook.categories.map((c) => c.category), ["Properties", "Contacts", "Companies", "Deals"]);
+    assert.deepEqual(playbook.categories.map((c) => c.category), ["Properties", "Contacts", "Companies", "Deals", "Segments"]);
     const top = topFixes(report.findings, report.score);
     assert.deepEqual(playbook.topFixes.map((t) => t.points), top.map((t) => t.points));
     assert.equal(playbook.topFixes.length, Math.min(5, report.findings.length));
@@ -148,6 +148,13 @@ describe("buildPlaybook: sections", () => {
     const typos = playbook.sections.find((s) => s.title === "Contacts with a malformed or mistyped email");
     assert.ok(typos?.steps.some((step) => step.general));
     assert.ok(playbook.sections.flatMap((s) => s.steps).some((step) => !step.general));
+  });
+
+  // The PDF prints the steps, then the list of items, then the CSV note.
+  it("points steps down to the list of items, never up", () => {
+    const steps = Object.values(GUIDANCE).map((g) => g.text);
+    assert.ok(steps.some((text) => text.includes("listed below")));
+    assert.deepEqual(steps.filter((text) => /listed above/.test(text)), []);
   });
 });
 

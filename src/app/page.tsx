@@ -20,6 +20,10 @@ const SCOPES = [
     names: ["crm.objects.contacts.read", "crm.objects.companies.read", "crm.objects.deals.read"],
     why: "Count records for fill rates and record checks, and read name, company, email and domain on recent records for the duplicate and email checks.",
   },
+  {
+    names: ["crm.lists.read"],
+    why: "Read segment (list) names, sizes and filters for the segment checks. Never the records in them.",
+  },
 ];
 
 function ScopesHelp() {
@@ -28,7 +32,7 @@ function ScopesHelp() {
       <summary>Which scopes does my key need?</summary>
       <p className={`${styles.note} ${styles.scopesIntro}`}>
         Create the key in HubSpot under <strong>Development &gt; Keys &gt; Service keys</strong> and
-        tick these six read-only scopes. If one is missing, the scan skips that check and says so.
+        tick these seven read-only scopes. If one is missing, the scan skips that check and says so.
       </p>
       <ul className={styles.scopes}>
         {SCOPES.map((scope) => (
@@ -87,11 +91,11 @@ export default function Home() {
         <ul className={styles.pitchList}>
           <li>
             <strong>What it checks:</strong> duplicate contacts and company domains, missing
-            lifecycle stages, emails, amounts and close dates, stale deals, and messy custom
-            properties.
+            lifecycle stages, emails, amounts and close dates, stale deals, messy custom
+            properties, and empty or duplicate segments.
           </li>
           <li>
-            <strong>Read-only by design:</strong> six read-only HubSpot scopes, and the report
+            <strong>Read-only by design:</strong> seven read-only HubSpot scopes, and the report
             shows record IDs, never names or emails.
           </li>
           <li>

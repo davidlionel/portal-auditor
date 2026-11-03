@@ -6,7 +6,7 @@
 
 A web app that connects to a HubSpot portal with a read-only service key, scans it for data and configuration problems, and returns a health score with a ranked fix list.
 
-**Status:** early build. The app runs property and record checks on contacts, companies and deals, scores the portal out of 100, lists the top 5 fixes, and exports CSVs and a step-by-step cleanup playbook (PDF).
+**Status:** early build. The app runs property and record checks on contacts, companies and deals, and checks the portal's segments (lists). It scores the portal out of 100, lists the top 5 fixes, and exports CSVs and a step-by-step cleanup playbook (PDF).
 
 The deployed site is **demo-only**: it shows a sample report from a HubSpot developer test portal and never accepts a service key. To scan your own portal, [run it on your machine](#run-it-on-your-own-portal).
 
@@ -32,7 +32,14 @@ The deployed site is **demo-only**: it shows a sample report from a HubSpot deve
 - Open deals with no close date
 - Open deals with no stage change in 30+ days
 
-Each finding shows a severity, a count, its rate (how many of the records or properties checked were affected), the points fixing it would add to the score, up to 10 samples (property names, or record IDs linked to HubSpot), why it matters and how to fix it. Sensitive and highly sensitive properties are not audited.
+**Segments (lists)**
+- Active segments whose filters use a contact, company or deal property that has been archived or no longer exists, including filters on associated records
+- Empty segments, created 30+ days ago and finished processing, active or static
+- Segments for the same object with the same name once case, spacing and punctuation are ignored ("Trade Show Leads" and "Trade show leads!"); numbered series such as "Webinar 2025" and "Webinar 2026" don't match
+
+Each finding shows a severity, a count, its rate (how many of the records, properties or segments checked were affected), the points fixing it would add to the score, up to 10 samples (property names, segment IDs and names, or record IDs linked to HubSpot), why it matters and how to fix it. Sensitive and highly sensitive properties are not audited.
+
+**Not checked: workflows.** HubSpot's v4 workflows API needs the `automation` scope, which also lets an app create and delete workflows, so reading workflows would break the read-only promise.
 
 ## Duplicate detection
 
@@ -66,9 +73,9 @@ Measured with `npm run bench:dedupe`, in a worst case where every contact shares
 The report opens with a score out of 100, a score for each category, and the top 5 fixes.
 
 - **Each check scores by rate, not count.** Rate = records (or properties) affected ÷ records (or properties) checked. A check scores 100 at 0% and loses points in a straight line until it reaches 0 at 10% for high-severity checks, 25% for medium and 50% for low. Because it's a rate, a 250,000-contact portal isn't marked down for being big: 2% of contacts missing an email scores the same at any size.
-- **What each rate is measured against.** All contacts or companies for presence checks; Customers for "Customer with no closed-won deal"; open deals for missing close date and stale deals; open or won deals for missing amount; the recent-records window for duplicate and email checks; custom properties for property checks. Duplicate checks count records in duplicate groups, so a group of six weighs more than a pair.
+- **What each rate is measured against.** All contacts or companies for presence checks; Customers for "Customer with no closed-won deal"; open deals for missing close date and stale deals; open or won deals for missing amount; the recent-records window for duplicate and email checks; custom properties for property checks; all segments for duplicate names, segments old enough to judge for empty segments, and active segments for filters on missing properties. Duplicate checks count records in duplicate groups, so a group of six weighs more than a pair.
 - **Only High-confidence duplicates count.** Medium and Low duplicates are reported, exported and in the playbook, but not scored until someone confirms them.
-- **Categories** average their checks, weighting high, medium and low severity 3:2:1. **The overall score** weights Contacts 35, Deals 25, Companies 20 and Properties 20. Automation (lists and workflows) isn't checked yet, so it isn't scored.
+- **Categories** average their checks, weighting high, medium and low severity 3:2:1. **The overall score** weights Contacts 30, Deals 25, Companies 20, Properties 15 and Segments 10. Workflows aren't checked, so they aren't scored.
 - **Skipped checks don't count.** A check that can't run (a missing scope, a property the portal doesn't have, no records yet) is left out, its weight is shared among the checks that ran, and the report lists it as not scored.
 - **Top 5 fixes** are ranked by points recovered: how much the overall score would rise if that problem were fixed.
 
@@ -82,7 +89,8 @@ After a scan, and on the sample report, **Download playbook (PDF)** gives a step
 - **One section per finding, biggest score gain first:** what's wrong, why it matters, how to fix it in HubSpot (the index-page filter, settings path and bulk action), and which CSV to use. When a HubSpot filter finds every affected record, it says "No CSV needed" and gives the filter. Only mistyped emails and duplicates need a CSV, because no filter can find them. Stale deals and deals missing an amount or close date also say how to split the work by deal owner. High-confidence duplicates go to Manage duplicates or the record's Merge action; Medium and Low come last, marked not scored, and say how to give each owner a view of their own possible duplicates to confirm. Each section ends with the HubSpot pages it relies on.
 - **Appendix A** describes each CSV column by column. **Appendix B** gives the import steps: Record ID, Update existing records only, a contact segment for contacts, or a "Cleanup reason" property for companies, deals and any duplicate file.
 - **Plain black and white**, so it prints and photocopies cleanly. Characters the bundled font can't draw (arrows, Japanese, Chinese, Korean) print as "?" and the section says so.
-- **No record values:** record IDs stay in the CSVs, and the PDF holds only check text, property names, counts and portal details. No owner names or IDs anywhere.
+- **No record values:** record IDs stay in the CSVs, and the PDF holds only check text, property names, segment IDs and names, counts and portal details. No owner names or IDs anywhere. Segment names are configuration, like property labels, so they're shown in the report, the playbook, the findings CSV and the segments CSV.
+- **Segment sections** list each segment by ID and name and give HubSpot's steps: open CRM > Segments, check the Used in tab, edit the filters, restore an archived property, rename, or delete (deleting a segment doesn't delete its records, and it can be restored within 90 days).
 
 ### Where the HubSpot steps come from
 
@@ -100,6 +108,7 @@ CSV downloads, built in the browser from the report on the page. Nothing is sent
 
 - **Findings summary:** one row per finding with check, object, category, severity, count, records affected, population, rate, whether it's scored, points recovered, why it matters and how to fix it.
 - **Records work list:** one file per object with record ID, object type, check, severity, duplicate group, match signals, HubSpot record link, a capped marker and a prefilled cleanup reason (for example "Portal audit 2026-10-28: Contacts with no email address"). Record IDs only: no names, emails, owners or other field values. Records in the same duplicate group share a group number, and their cleanup reason ends with it ("…, group 12").
+- **Segments:** one row per flagged segment per check, with segment ID, segment name, check, severity, a same-name group number and what's wrong ("static", or the archived or missing property its filters use). Segment names are configuration, not record data.
 - **Import files** (in the ZIP, under `imports/`): one per finding that needs a CSV (mistyped emails, and each duplicate tier for contacts and companies), one row per record with Record ID, Cleanup reason and, for duplicates, the group number and match signals.
 
 Count checks page through the matching records during the scan, 200 per call, up to 1,000 per check (`records.workListCap` in `src/config/checks.ts`). When a check matches more, its rows say "first 1,000 of N" and the report notes it. The service key is discarded after the scan, so IDs can't be fetched later. Duplicate and email checks use the IDs already read from the recent-records window.
@@ -126,7 +135,7 @@ Scanning runs on your own machine, so your service key never leaves it except to
 2. Get the code: `git clone https://github.com/davidlionel/portal-auditor.git`, or [download the ZIP](https://github.com/davidlionel/portal-auditor/archive/refs/heads/main.zip) and unzip it. Open a terminal in the project folder.
 3. Run `npm install`, then `npm run dev`.
 4. Open http://localhost:3000.
-5. Paste a service key and click **Run scan**. Create the key in HubSpot under **Development > Keys > Service keys**, ticking only the six read-only scopes below. Start with a developer test portal or sandbox rather than a portal with client data.
+5. Paste a service key and click **Run scan**. Create the key in HubSpot under **Development > Keys > Service keys**, ticking only the seven read-only scopes below. Start with a developer test portal or sandbox rather than a portal with client data.
 
 The key is pasted into the page for each scan and never saved.
 
@@ -136,9 +145,11 @@ The key is pasted into the page for each scan and never saved.
 |---|---|---|
 | `crm.schemas.contacts.read`, `crm.schemas.companies.read`, `crm.schemas.deals.read` | `GET /crm/properties/2026-09/{object}` | List property definitions: labels, descriptions, dropdown options |
 | `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search` | Count records for fill rates and record checks; read name, company, email, phone, mobile phone and associated company ID on recent contacts, and domain, additional domains, name and location on recent companies, for duplicate and email checks |
+| `crm.lists.read` | `POST /crm/lists/2026-09/all`, `GET /crm/lists/2026-09?listIds=…&includeFilters=true` | Segment names, sizes, ages and filter definitions for the segment checks. Never the records in a segment |
+| the schemas scopes above | `GET /crm/properties/2026-09/{object}/{name}?archived=true` (then `?dataSensitivity=sensitive` and `highly_sensitive`) | Only for a property a segment filters on that isn't in the property list: is it archived, sensitive, or gone? |
 | none listed in HubSpot's docs | `GET /account-info/2026-09/details` | Confirms which portal is connected (Hub ID, account type, data center) |
 
-Every scope is read-only. If one is missing, the scan skips that object or check and says so in the report.
+Every scope is read-only. If one is missing, the scan skips that object or check and says so in the report. HubSpot's segments API accepts `crm.lists.read` or `crm.segments.read`; its scopes list names only `crm.lists.read`, so that's the one to tick. A key made before the segment checks existed lacks it, and the scan skips the Segments category with a note.
 
 ### Deploying your own copy
 
@@ -152,7 +163,7 @@ This is only for maintainers replacing the sample; scanning doesn't need it. The
 HUBSPOT_TOKEN=<service key>
 ```
 
-then run `npm run demo:snapshot`. The script is the only thing that reads `HUBSPOT_TOKEN`. The script scans the portal, refuses anything that isn't a developer test portal, and checks the result contains only record IDs, property names and labels, counts, check text and portal details (no names, emails, phone numbers or other record values) before saving it with the scan date. The sample page re-scores the snapshot with the current scoring settings, and shows record IDs without links, since links into HubSpot need a login to that portal. The site won't build without a snapshot.
+then run `npm run demo:snapshot`. The script is the only thing that reads `HUBSPOT_TOKEN`. The script scans the portal, refuses anything that isn't a developer test portal, and checks the result contains only record IDs, property names and labels, segment IDs and names, counts, check text and portal details (no names, emails, phone numbers or other record values) before saving it with the scan date. The sample page re-scores the snapshot with the current scoring settings, and shows record IDs without links, since links into HubSpot need a login to that portal. The site won't build without a snapshot.
 
 ### Simulated 250K portal (development only)
 
@@ -172,12 +183,12 @@ The simulator only runs when **both** are true: the app is a development build (
 npm test
 ```
 
-Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels), the cases that must be caught (Webinar / webinar), and the 30-day age rule for fill rate. The duplicate tests plant a case for every tier and the controls that must never reach High: two John Smiths at different companies, siblings sharing a home phone, a switchboard number on 20 contacts, free email domains, and two John Smiths on a large company's email domain. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names, emails, phone numbers, domains or locations it returned appear in the playbook, the PDF or any file in the ZIP.
+Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels, "Webinar 2025" / "Webinar 2026" segments, a sensitive property HubSpot won't look up), the cases that must be caught (Webinar / webinar, Trade Show Leads / Trade show leads!), and the 30-day age rules for fill rate and empty segments. The duplicate tests plant a case for every tier and the controls that must never reach High: two John Smiths at different companies, siblings sharing a home phone, a switchboard number on 20 contacts, free email domains, and two John Smiths on a large company's email domain. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names, emails, phone numbers, domains or locations it returned appear in the playbook, the PDF or any file in the ZIP.
 
 Slower checks run separately. Both are plain Node scripts, so they work the same in PowerShell, cmd and bash:
 
 ```bash
-npm run test:scale            # full scan of the simulated 250K portal, about 2½ minutes
+npm run test:scale            # full scan of the simulated 250K portal, then segments at 50, 500 and 5,000, about 3 minutes
 npm run bench:dedupe          # duplicate matching memory and time at 10K, 250K and 1M contacts
 npm run check:simulator-prod  # builds for production and proves the simulator is blocked
 npm run check:deploy -- <url> # checks a running site is demo-only (default http://localhost:3000)
@@ -230,11 +241,13 @@ Everything that is a count uses the CRM Search API's `total`, so no records are 
 - **Record checks** (missing lifecycle stage, missing email, Customer with no won deal, companies with no contacts, deals missing amount or close date, stale deals): one search each returns the total, the first 10 IDs as samples, and up to 200 IDs for the work list. Checks with more matches page on, up to 1,000 IDs (5 calls).
 - **Populations** for the score: the object totals above, plus one search each for Customers, open deals, and open or won deals.
 
+**Segment checks** read every segment's name, size and age, 500 per call, then the filter definitions of the active segments, 100 per call. Properties a filter uses that aren't in the property lists are looked up one at a time (up to 3 calls each, at most 25 properties). If HubSpot refuses a lookup (403, as for a sensitive property the key can't see), the property is noted in the scan details as not verified and the segment isn't flagged. Filters on events, tickets and custom objects aren't checked, and the report says how many there were.
+
 Duplicate and email checks need field values, so they read a **window of the most recently created records**: up to 10,000 contacts and 10,000 companies (200 per call), requesting only the fields they compare (optional ones only when the portal has them). Each page is reduced to matching keys and dropped, and only records sharing a key are compared (see [Duplicate detection](#duplicate-detection)). The keys stay in server memory during the scan; the report shows record IDs only.
 
 Search calls run one at a time, at least 250ms apart, to stay under HubSpot's limit of 5 search requests per second per account. Each report shows the number of API calls and the scan time.
 
-**Tested against a simulated 250K-contact portal; not yet run on a real portal of that size.** The simulated portal has 250,000 contacts, 30,000 companies, 15,000 deals and 300 custom properties, HubSpot-like response times (120–350 ms per search) and injected 429s. One full scan through the real scan endpoint (`npm run test:scale`) measured:
+**Tested against a simulated 250K-contact portal; not yet run on a real portal of that size.** The simulated portal has 250,000 contacts, 30,000 companies, 15,000 deals, 300 custom properties and 500 segments, HubSpot-like response times (120–350 ms per search) and injected 429s. One full scan through the real scan endpoint (`npm run test:scale`) measured:
 
 | Part | Calls |
 |---|---|
@@ -243,10 +256,21 @@ Search calls run one at a time, at least 250ms apart, to stay under HubSpot's li
 | Record count checks, including work-list paging (7 checks) | 31 |
 | Score populations (Customers, open deals, open or won deals) | 3 |
 | Contact and company windows (10,000 ÷ 200 each) | 100 |
+| Segments: 1 page, 3 filter batches (250 active), 6 property lookups | 10 |
 | Retries after injected 429s | 13 |
-| **Total** | **454 calls in 2 min 24 s** |
+| **Total** | **464 calls in 2 min 26 s** |
 
 Before measuring, the estimate was about 445 calls and 1 minute 50 seconds. The count checks needed 31 calls rather than the 35 allowed, because some had fewer than 1,000 matches. The scan took longer than estimated because many simulated responses take longer than the 250 ms gap between searches, and the 13 retries added roughly 20–25 seconds of waiting. A real portal's timing depends on HubSpot's actual response times and on other apps sharing the portal's limits.
+
+The segment checks alone, on the simulator (simulated response times, half the segments active, 3 properties to look up):
+
+| Segments | Calls | Time |
+|---|---|---|
+| 50 | 8 | 1.5 s |
+| 500 | 10 | 1.8 s |
+| 5,000 | 41 | 8.0 s |
+
+Calls = segments ÷ 500 + active segments ÷ 100 + up to 3 per property looked up. On the developer test portal (10 segments, 4 active, no properties to look up), the segment checks made 2 calls in 0.4 s. Real filter definitions are larger than the simulator's, so a large real portal will take longer than the table shows; that hasn't been measured yet.
 
 The window keeps duplicate checks at a fixed cost, so a portal with 1 million contacts still uses 50 calls for them. The stronger duplicate matching reads extra fields on the same pages, so it adds no calls.
 
@@ -261,4 +285,11 @@ The window keeps duplicate checks at a fixed cost, so a portal with 1 million co
 - **Recently closed deals.** HubSpot updates a contact's deal close date, and its search index, a short while after a deal closes, so a deal won in the last few minutes can still show its contact under "Customer with no closed-won deal".
 - **Email formats HubSpot already rejects.** Most bad formats never get in, so the malformed check mostly finds typo domains from a fixed list.
 - **Stale deals on lower tiers.** The check uses HubSpot's "date entered current stage" property; if the portal doesn't have it, the check is skipped with a note.
+
+## What the segment checks can miss
+
+- **Filters on missing properties should be rare.** HubSpot won't archive a property a segment uses, so this mostly catches segments made through the API or before that rule.
+- **Filters on other objects and events.** Only contact, company and deal properties are checked, since the scan reads only those property lists.
+- **Sensitive properties.** A property HubSpot won't look up for this key is noted, never flagged.
+- **Unused segments.** The scan doesn't judge whether a segment is used; HubSpot's Unused segments tab lists those not used or updated in two months, and the playbook points to it.
 - **Not yet checked:** free-text fields that should be dropdowns. A shared phone number alone is never a duplicate match.

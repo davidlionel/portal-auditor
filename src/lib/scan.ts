@@ -33,10 +33,25 @@ import {
 import { DUPLICATE_METAS, DUPLICATE_TOOL_PATH, duplicateFindings } from "./checks/records/duplicates";
 import { MALFORMED_EMAIL, hasMalformedEmail, malformedEmailFinding } from "./checks/records/email-quality";
 import {
+  DUPLICATE_SEGMENT_NAMES,
+  EMPTY_SEGMENTS,
+  SEGMENT_METAS,
+  SEGMENT_MISSING_PROPERTY,
+  checkDuplicateSegmentNames,
+  checkEmptySegments,
+  checkSegmentProperties,
+  emptySegmentsPopulation,
+  filterProperties,
+  isActive,
+  type MissingProperty,
+  type PropertyRef,
+} from "./checks/segments";
+import {
   CATEGORY_FOR_OBJECT,
   SEVERITY_RANK,
   type Category,
   type CheckMeta,
+  type CheckObject,
   type CheckRun,
   type Finding,
 } from "./checks/types";
@@ -49,6 +64,7 @@ import {
   type Transport,
 } from "./hubspot/client";
 import { listProperties, type ObjectType, type PropertyDef } from "./hubspot/properties";
+import { propertyStatus, readSegmentFilters, readSegments, type PropertyStatus, type SegmentDef } from "./hubspot/segments";
 import {
   countRecords,
   countWhere,
@@ -246,7 +262,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 function ranCheck(
   meta: CheckMeta,
   category: Category,
-  objectType: ObjectType,
+  objectType: CheckObject,
   population: number,
   findings: Finding[],
 ): CheckRun {
@@ -264,7 +280,7 @@ function ranCheck(
 function skippedChecks(
   metas: CheckMeta[],
   category: Category,
-  objectType: ObjectType,
+  objectType: CheckObject,
   reason: string,
 ): CheckRun[] {
   return metas.map((meta) => ({
@@ -472,6 +488,139 @@ async function runRecordChecks(ctx: ScanContext, setup: ObjectSetup): Promise<Ph
   return { findings: [...findings, ...done.findings], notes: [...notes, ...done.notes], runs: [...runs, ...done.runs] };
 }
 
+const plural = (n: number, one: string, many: string) => `${fmt(n)} ${n === 1 ? one : many}`;
+
+// Segment (list) checks: the segment list gives names, sizes and ages; the
+// active segments' filter definitions are read in batches and checked
+// against the property lists the scan already has. Properties missing from
+// those lists are looked up one by one before anything is flagged.
+async function runSegmentChecks(ctx: ScanContext, setups: ObjectSetup[]): Promise<PhaseResult> {
+  const { transport, tracker, config, now, progress } = ctx;
+  const findings: Finding[] = [];
+  const notes: string[] = [];
+  const runs: CheckRun[] = [];
+  const scope = "crm.lists.read";
+  const skip = (metas: CheckMeta[], reason: string, note: string | false) => {
+    if (note) notes.push(`${note} skipped: ${reason}.`);
+    runs.push(...skippedChecks(metas, "Segments", "segments", reason));
+  };
+  if (ctx.stopped) {
+    skip(SEGMENT_METAS, LIMIT_REASON, false);
+    return { findings, notes, runs };
+  }
+
+  progress.phase("Reading segments");
+  const read = await readSegments(transport, tracker, { onTotal: (_total, pages) => progress.plan(pages - 1) });
+  if (!read.ok) {
+    const outcome = classify(ctx, read.kind);
+    if (outcome === "abort") return { abort: read.kind };
+    skip(SEGMENT_METAS, outcome === "stop" ? LIMIT_REASON : problemNote(read.kind, scope), outcome === "skip" && "Segment checks");
+    return { findings, notes, runs };
+  }
+  const segments = read.data;
+  const active = segments.filter(isActive);
+  notes.push(`Segment checks covered all ${plural(segments.length, "segment", "segments")} (${fmt(active.length)} active).`);
+
+  // The segment list alone is enough for these two.
+  const empty = checkEmptySegments(segments, now, config);
+  const duplicates = checkDuplicateSegmentNames(segments, config);
+  findings.push(...empty, ...duplicates);
+  runs.push(
+    ranCheck(EMPTY_SEGMENTS, "Segments", "segments", emptySegmentsPopulation(segments, now, config).length, empty),
+    ranCheck(DUPLICATE_SEGMENT_NAMES, "Segments", "segments", segments.length, duplicates),
+  );
+
+  // Active segments' filters.
+  const batchSize = config.segments.filterBatchSize;
+  progress.plan(Math.ceil(active.length / batchSize));
+  progress.phase("Checking segment filters", `0 of ${fmt(active.length)}`);
+  const filters = await readSegmentFilters(transport, tracker, active.map((s) => s.id), batchSize, (done) =>
+    progress.detail(`${fmt(done)} of ${fmt(active.length)}`),
+  );
+  if (!filters.ok) {
+    const outcome = classify(ctx, filters.kind);
+    if (outcome === "abort") return { abort: filters.kind };
+    const reason = outcome === "stop" ? LIMIT_REASON : problemNote(filters.kind, scope);
+    skip([SEGMENT_MISSING_PROPERTY], reason, outcome === "skip" && `"${SEGMENT_MISSING_PROPERTY.title}"`);
+    return { findings, notes, runs };
+  }
+
+  // Properties each segment uses, and the ones the property lists don't have.
+  const known = new Map(setups.flatMap((s) => (s.props ? [[s.objectType, s.propertyNames] as const] : [])));
+  const keyOf = (ref: PropertyRef) => `${ref.objectType}.${ref.property}`;
+  const checked: { segment: SegmentDef; refs: PropertyRef[] }[] = [];
+  const toLookUp = new Map<string, PropertyRef>();
+  const unreadObjects = new Set<ObjectType>();
+  let unchecked = 0;
+  for (const segment of active) {
+    const branch = filters.data.get(segment.id);
+    if (!branch) continue;
+    const used = filterProperties(branch, segment.objectTypeId);
+    unchecked += used.unchecked;
+    const refs = used.refs.filter((ref) => {
+      if (known.has(ref.objectType)) return true;
+      unreadObjects.add(ref.objectType);
+      return false;
+    });
+    for (const ref of refs) if (!known.get(ref.objectType)!.has(ref.property)) toLookUp.set(keyOf(ref), ref);
+    checked.push({ segment, refs });
+  }
+
+  // Archived, sensitive, or gone? A refused lookup (403) can't be verified,
+  // so it isn't flagged.
+  const statuses = new Map<string, PropertyStatus>();
+  const lookups = [...toLookUp.entries()].slice(0, config.segments.maxPropertyLookups);
+  const notLookedUp = toLookUp.size - lookups.length;
+  if (lookups.length) progress.phase("Looking up properties used in segment filters", `0 of ${lookups.length}`);
+  progress.plan(lookups.length);
+  for (const [i, [key, ref]] of lookups.entries()) {
+    const status = await propertyStatus(transport, tracker, ref.objectType, ref.property);
+    progress.detail(`${i + 1} of ${lookups.length}`);
+    if (status.ok) {
+      statuses.set(key, status.data);
+      continue;
+    }
+    const outcome = classify(ctx, status.kind);
+    if (outcome === "abort") return { abort: status.kind };
+    if (outcome === "stop") break;
+    statuses.set(key, "unverified");
+  }
+  if (ctx.stopped) {
+    skip([SEGMENT_MISSING_PROPERTY], LIMIT_REASON, false);
+    return { findings, notes, runs };
+  }
+
+  const results = checked.map(({ segment, refs }) => ({
+    segment,
+    missing: refs.flatMap((ref): MissingProperty[] => {
+      const status = statuses.get(keyOf(ref));
+      return status === "archived" || status === "not_found" ? [{ ...ref, status }] : [];
+    }),
+  }));
+  const missing = checkSegmentProperties(results, checked.length, config);
+  findings.push(...missing);
+  runs.push(ranCheck(SEGMENT_MISSING_PROPERTY, "Segments", "segments", checked.length, missing));
+
+  const unverified = [...statuses].filter(([, s]) => s === "unverified").map(([key]) => key);
+  if (unverified.length) {
+    notes.push(
+      `Segment filters: couldn't verify ${plural(unverified.length, "property", "properties")} (${unverified.join(", ")}). HubSpot refused the lookup, as it does for sensitive properties this key can't see, so segments that use ${unverified.length === 1 ? "it" : "them"} weren't flagged.`,
+    );
+  }
+  if (notLookedUp) {
+    notes.push(
+      `Segment filters: ${plural(notLookedUp, "more property", "more properties")} missing from the property lists ${notLookedUp === 1 ? "wasn't" : "weren't"} looked up (the scan looks up at most ${config.segments.maxPropertyLookups}), so segments that use ${notLookedUp === 1 ? "it" : "them"} weren't flagged.`,
+    );
+  }
+  if (unreadObjects.size) {
+    notes.push(`Segment filters on ${[...unreadObjects].join(", ")} properties weren't checked: the scan couldn't read those property lists.`);
+  }
+  if (unchecked) {
+    notes.push(`Segment filters on events, tickets or custom objects aren't checked (${plural(unchecked, "filter", "filters")}).`);
+  }
+  return { findings, notes, runs };
+}
+
 export async function runScan(transport: Transport, options: ScanOptions = {}): Promise<ScanResult> {
   const config = options.config ?? CHECKS_CONFIG;
   const scoring = options.scoring ?? SCORING_CONFIG;
@@ -568,7 +717,8 @@ export async function runScan(transport: Transport, options: ScanOptions = {}): 
     setup.total = total.data;
   }
 
-  progress.beginChecks(setups.reduce((n, setup) => n + plannedCalls(setup, config, ctx.now), 0));
+  // Plus the segments' first page; the rest are planned once its total is known.
+  progress.beginChecks(setups.reduce((n, setup) => n + plannedCalls(setup, config, ctx.now), 0) + 1);
 
   // Checks, object by object.
   for (const setup of setups) {
@@ -639,6 +789,12 @@ export async function runScan(transport: Transport, options: ScanOptions = {}): 
     notes.push(...done.notes);
     runs.push(...done.runs);
   }
+
+  const segments = await runSegmentChecks(ctx, setups);
+  if ("abort" in segments) return { ok: false, kind: segments.abort };
+  findings.push(...segments.findings);
+  notes.push(...segments.notes);
+  runs.push(...segments.runs);
 
   progress.phase("Scoring");
   findings.sort(

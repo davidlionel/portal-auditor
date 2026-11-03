@@ -17,7 +17,7 @@ export type ScoringConfig = {
 // decision log, not here. Scoring takes this as a default, so tests can pass
 // their own weights.
 export const SCORING_CONFIG: ScoringConfig = {
-  categoryWeights: { Contacts: 35, Deals: 25, Companies: 20, Properties: 20 },
+  categoryWeights: { Contacts: 30, Deals: 25, Companies: 20, Properties: 15, Segments: 10 },
   severityWeights: { high: 3, medium: 2, low: 1 },
   zeroAtRate: { high: 0.1, medium: 0.25, low: 0.5 },
   topFixes: 5,

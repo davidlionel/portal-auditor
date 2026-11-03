@@ -15,6 +15,11 @@ export type ChecksConfig = {
     staleDealDays: number;
     typoDomains: string[];
   };
+  segments: {
+    emptyMinAgeDays: number;
+    filterBatchSize: number;
+    maxPropertyLookups: number;
+  };
   duplicates: {
     sharedPhoneMin: number;
     largeOrgMin: number;
@@ -68,6 +73,17 @@ export const CHECKS_CONFIG: ChecksConfig = {
       "outllook.com",
       "iclod.com",
     ],
+  },
+  segments: {
+    // Segments younger than this may still be filling up, so they aren't
+    // reported as empty.
+    emptyMinAgeDays: 30,
+    // Segment IDs per call when reading filter definitions.
+    filterBatchSize: 100,
+    // Properties named in segment filters but missing from the property
+    // list are looked up one by one (archived, sensitive or gone), up to
+    // this many names. The rest are reported as not verified.
+    maxPropertyLookups: 25,
   },
   duplicates: {
     // A phone number on this many contacts in the window is a shared line

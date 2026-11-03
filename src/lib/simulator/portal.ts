@@ -8,17 +8,27 @@ import type { Filter, FilterGroup } from "../hubspot/search";
 export type PortalSize = {
   records: Record<ObjectType, number>;
   customProperties: Record<ObjectType, number>;
+  segments: number;
 };
 
 export const SIZE_250K: PortalSize = {
   records: { contacts: 250_000, companies: 30_000, deals: 15_000 },
   customProperties: { contacts: 200, companies: 60, deals: 40 },
+  segments: 500,
 };
 
 export const SIZE_SMALL: PortalSize = {
   records: { contacts: 900, companies: 120, deals: 60 },
   customProperties: { contacts: 12, companies: 6, deals: 4 },
+  segments: 60,
 };
+
+// Properties the simulated segments filter on that aren't in the property
+// lists: one archived, one deleted, and one sensitive property whose lookup
+// HubSpot refuses (403).
+export const SIM_ARCHIVED_PROPERTY = "sim_archived_source";
+export const SIM_DELETED_PROPERTY = "sim_deleted_region";
+export const SIM_SENSITIVE_PROPERTY = "sim_sensitive_notes";
 
 type RawProperty = {
   name: string;
@@ -154,10 +164,65 @@ export function createPortal(size: PortalSize = SIZE_250K, now = Date.now()) {
     return String(400_000_000 + (hash % 1000) * 100_000 + i);
   }
 
-  return { size, properties, total, record, matchId };
+  return { size, properties, total, record, matchId, segment: (index: number) => simSegment(index, size, now) };
 }
 
 export type SimPortal = ReturnType<typeof createPortal>;
+
+// One segment, by index (its ID is 1,000 + index). Even indexes are active
+// (DYNAMIC) and filter on a custom contact property plus an associated
+// company's domain; odd ones are static. Planted, by index:
+//   %25 = 0     created 5 days ago and empty: too young to report (no match)
+//   %20 = 3     static and empty, created long ago (empty)
+//   %40 = 18    active and empty, created long ago (empty)
+//   %50 = 11    the one before's name in other case with "!" (duplicate name)
+//   %100 = 4    filters on an archived property (missing property)
+//   %100 = 6    filters on a deleted property (missing property)
+//   %100 = 8    filters on a sensitive property the key can't look up (no match)
+//   %100 = 10   also has an event filter, which isn't checked
+// Names carry their index, so "Sim segment 12" and "Sim segment 13" are a
+// numbered series, not duplicates.
+function simSegment(index: number, size: PortalSize, now: number) {
+  const active = index % 2 === 0;
+  const young = index % 25 === 0;
+  const name = index % 50 === 11 ? `SIM SEGMENT ${index - 1}!` : `Sim segment ${index}`;
+  const customs = Math.max(1, size.customProperties.contacts);
+  const property =
+    index % 100 === 4
+      ? SIM_ARCHIVED_PROPERTY
+      : index % 100 === 6
+        ? SIM_DELETED_PROPERTY
+        : index % 100 === 8
+          ? SIM_SENSITIVE_PROPERTY
+          : `sim_contacts_${index % customs}`;
+  const propertyFilter = (name: string) => ({
+    filterType: "PROPERTY",
+    property: name,
+    operation: { operationType: "ALL_PROPERTY", operator: "IS_KNOWN" },
+  });
+  const branches = [
+    { filterBranchType: "ASSOCIATION", objectTypeId: "0-2", operator: "IN_LIST", associationTypeId: 279, filterBranches: [], filters: [propertyFilter("domain")] },
+    ...(index % 100 === 10
+      ? [{ filterBranchType: "UNIFIED_EVENTS", eventTypeId: "0-1", operator: "HAS_COMPLETED", filterBranches: [], filters: [propertyFilter("hs_url")] }]
+      : []),
+  ];
+  return {
+    listId: String(1_000 + index),
+    name,
+    objectTypeId: "0-1",
+    processingType: active ? "DYNAMIC" : "MANUAL",
+    processingStatus: "COMPLETE",
+    createdAt: new Date(now - (young ? 5 : 200) * DAY_MS).toISOString(),
+    size: young || index % 20 === 3 || index % 40 === 18 ? 0 : 40 + (index % 7) * 13,
+    filterBranch: active
+      ? {
+          filterBranchType: "OR",
+          filters: [],
+          filterBranches: [{ filterBranchType: "AND", filters: [propertyFilter(property)], filterBranches: branches }],
+        }
+      : undefined,
+  };
+}
 
 // A name made of letters only, different for every n, so two simulated
 // people's names are never one typo apart by accident.

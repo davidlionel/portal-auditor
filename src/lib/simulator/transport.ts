@@ -1,7 +1,7 @@
 import type { Transport } from "../hubspot/client";
 import type { ObjectType } from "../hubspot/properties";
 import type { SearchRequest } from "../hubspot/search";
-import { SIZE_250K, createPortal, filterSignature, type PortalSize } from "./portal";
+import { SIM_ARCHIVED_PROPERTY, SIM_SENSITIVE_PROPERTY, SIZE_250K, createPortal, filterSignature, type PortalSize } from "./portal";
 
 export type RateLimitMode =
   // About 2% of searches get a 10-second-window 429 (half with
@@ -79,7 +79,41 @@ export function simulatorTransport(options: SimulatorOptions = {}): { transport:
       }
       const props = /^\/crm\/properties\/[\w-]+\/(contacts|companies|deals)$/.exec(path);
       if (props) return json({ results: portal.properties[props[1] as ObjectType] });
+      // One property looked up by name. Each query matches only its own kind.
+      const one = /^\/crm\/properties\/[\w-]+\/(?:contacts|companies|deals)\/([\w-]+)\?(.*)$/.exec(path);
+      if (one) {
+        if (one[1] === SIM_ARCHIVED_PROPERTY && one[2] === "archived=true") return json({ name: one[1], archived: true });
+        if (one[1] === SIM_SENSITIVE_PROPERTY && one[2].startsWith("dataSensitivity=")) {
+          return json({ status: "error", category: "MISSING_SCOPES" }, 403);
+        }
+        return json({ status: "error", category: "OBJECT_NOT_FOUND" }, 404);
+      }
+      // Segments by ID, with their filters.
+      if (/^\/crm\/lists\/[\w-]+\?/.test(path)) {
+        const ids = [...new URLSearchParams(path.slice(path.indexOf("?") + 1)).getAll("listIds")];
+        const lists = ids
+          .map((id) => Number(id) - 1_000)
+          .filter((i) => i >= 0 && i < portal.size.segments)
+          .map((i) => portal.segment(i));
+        return json({ lists });
+      }
       return json({ message: "Not found" }, 404);
+    }
+
+    // Every segment, up to 500 a page.
+    if (/^\/crm\/lists\/[\w-]+\/all$/.test(path)) {
+      await delay(150, 400);
+      const req = body as { count?: number; after?: string };
+      const start = Number(req.after ?? 0);
+      const count = Math.max(0, Math.min(req.count ?? 20, 500, portal.size.segments - start));
+      const results = Array.from({ length: count }, (_, i) => {
+        // The read-all call has no filters; the size comes as a string.
+        const { size, filterBranch, ...segment } = portal.segment(start + i);
+        void filterBranch;
+        return { ...segment, listVersion: 1, additionalProperties: { hs_list_size: String(size) } };
+      });
+      const next = start + count < portal.size.segments ? { next: { after: String(start + count) } } : undefined;
+      return json({ total: portal.size.segments, results, ...(next && { paging: next }) });
     }
 
     const search = /^\/crm\/objects\/[\w-]+\/(contacts|companies|deals)\/search$/.exec(path);

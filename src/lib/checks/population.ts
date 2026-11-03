@@ -1,11 +1,11 @@
-import type { ObjectType } from "../hubspot/properties";
 import { COUNT_CHECKS } from "./records/count-checks";
-import type { Finding } from "./types";
+import type { CheckObject, Finding } from "./types";
 
-const OBJECT_NOUNS: Record<ObjectType, [string, string]> = {
+const OBJECT_NOUNS: Record<CheckObject, [string, string]> = {
   contacts: ["contact", "contacts"],
   companies: ["company", "companies"],
   deals: ["deal", "deals"],
+  segments: ["segment", "segments"],
 };
 
 // Property checks measure custom properties; the dropdown checks only look
@@ -15,13 +15,20 @@ const PROPERTY_NOUNS: Record<string, [string, string]> = {
   "properties.dropdown-plural-variants": ["dropdown property", "dropdown properties"],
 };
 
+// The filter check only reads active segments' filters.
+const SEGMENT_NOUNS: Record<string, [string, string]> = {
+  "segments.filters-missing-property": ["active segment", "active segments"],
+};
+
 // What a check's population is called: "customers", "open deals",
 // "properties", or the object's own name.
 export function populationNoun(finding: Pick<Finding, "checkId" | "category" | "objectType" | "population">): string {
   const [singular, plural] =
     finding.category === "Properties"
       ? (PROPERTY_NOUNS[finding.checkId] ?? ["property", "properties"])
-      : (COUNT_CHECKS.find((c) => c.checkId === finding.checkId)?.populationNoun ?? OBJECT_NOUNS[finding.objectType]);
+      : finding.category === "Segments"
+        ? (SEGMENT_NOUNS[finding.checkId] ?? OBJECT_NOUNS.segments)
+        : (COUNT_CHECKS.find((c) => c.checkId === finding.checkId)?.populationNoun ?? OBJECT_NOUNS[finding.objectType]);
   return finding.population === 1 ? singular : plural;
 }
 

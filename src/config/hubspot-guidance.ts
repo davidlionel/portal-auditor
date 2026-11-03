@@ -35,6 +35,8 @@ const IMPORT = `${KB}/import-and-export/import-records-for-a-single-object`;
 const FIELD_TYPES = `${KB}/properties/property-field-types-in-hubspot`;
 const MERGE = `${KB}/records/merge-records`;
 const LIFECYCLE = `${KB}/records/use-lifecycle-stages`;
+const SEGMENTS = `${KB}/segments/edit-or-delete-lists`;
+const SEGMENT_TROUBLE = `${KB}/segments/troubleshoot-lists`;
 
 export const GUIDANCE = {
   // Finding records on an index page.
@@ -335,6 +337,78 @@ export const GUIDANCE = {
     lastVerified: "2026-10-28",
   },
 
+  // Segments (lists).
+  openSegments: {
+    text: "In HubSpot, click More, then go to CRM > Segments (if More isn't there, go to CRM > Segments directly).",
+    source: SEGMENTS,
+    keyPhrases: ["If More doesn't appear in your account, navigate to CRM > Segments directly"],
+    lastVerified: "2026-10-29",
+  },
+  findSegment: {
+    text: "Each segment is listed below by its ID and name. Search for the name, or hover over a segment and click Details to see its IDs: the ID here is the one HubSpot calls the ILS Segment ID.",
+    source: SEGMENTS,
+    keyPhrases: ["Hover over a segment and click Details", "the ILS Segment ID is referenced when using the Exports API or the v3 Lists API"],
+    lastVerified: "2026-10-29",
+  },
+  unusedSegmentsTab: {
+    text: "Start with the Unused segments tab, which lists segments that haven't been used or updated in the last two months.",
+    source: SEGMENTS,
+    keyPhrases: ["To view only segments that haven't been used or updated in the last two months, click the Unused segments tab"],
+    lastVerified: "2026-10-29",
+  },
+  segmentUsedIn: {
+    text: "Hover over the segment, click Details, then click the Used in tab to see the segments, workflows, saved views, reports and pages that use it.",
+    source: SEGMENT_TROUBLE,
+    keyPhrases: ["In the right panel, click the Used in tab"],
+    lastVerified: "2026-10-29",
+  },
+  compareSegments: {
+    text: "For each pair, compare the two segments' Filters and Used in tabs to see whether they're really the same segment, and which one is in use.",
+    source: SEGMENTS,
+    keyPhrases: ["To view the segment's filters, navigate to the Filters tab", "To view where the segment is used, navigate to the Used in tab"],
+    lastVerified: "2026-10-29",
+  },
+  fixSegmentFilter: {
+    text: "Click the segment's name, then in the Filters panel click Edit. Replace or remove each filter on a property listed below, then click Save changes in the top right.",
+    source: SEGMENTS,
+    keyPhrases: ["in the Filters panel, click Edit", "To save your changes, in the top right, click Save changes"],
+    lastVerified: "2026-10-29",
+  },
+  editSegmentFilters: {
+    text: "If a segment should have members, click its name, then in the Filters panel click Edit, correct the filters and click Save changes in the top right.",
+    source: SEGMENTS,
+    keyPhrases: ["in the Filters panel, click Edit", "To save your changes, in the top right, click Save changes"],
+    lastVerified: "2026-10-29",
+  },
+  restoreArchivedProperty: {
+    text: "If an archived property is still needed, restore it instead: go to Settings > Properties, choose the object, click the Archived tab, select the property and click Restore. Properties archived 90 or more days ago can't be restored.",
+    source: ARCHIVE,
+    keyPhrases: ["Click the Archived tab", "At the top of the table, click Restore or Delete", "properties archived 90 or more days ago have been deleted and cannot be restored"],
+    lastVerified: "2026-10-29",
+  },
+  renameSegment: {
+    text: "To rename the one you keep, click its name, then click the edit icon next to the current name and enter a new name.",
+    source: SEGMENTS,
+    keyPhrases: ["icon next to the current name, then enter a new name"],
+    lastVerified: "2026-10-29",
+  },
+  deleteSegment: {
+    text: "To delete a segment nothing uses, hover over it, click More, then select Delete; for several, select their check boxes and click Delete at the top of the table. Deleting a segment doesn't delete its records, and it can be restored from the Recently deleted tab within 90 days.",
+    source: SEGMENTS,
+    keyPhrases: [
+      "hover over a segment, click More, then select Delete",
+      "Deleting a segment does not delete the segment's records",
+      "the segment can be restored within 90 days from the Recently deleted tab",
+    ],
+    lastVerified: "2026-10-29",
+  },
+  deleteSegmentGrayedOut: {
+    text: "If Delete is grayed out, the segment is used in a HubSpot tool or is a default segment: remove it from the tools on its Used in tab first.",
+    source: SEGMENT_TROUBLE,
+    keyPhrases: ["the Delete option will be grayed out", "The segment is used in a HubSpot tool; or the segment is a default segment"],
+    lastVerified: "2026-10-29",
+  },
+
   // Importing a file by Record ID (the playbook's appendix).
   importStart: {
     text: "Click More, then go to Data Management > Data Integration and start an import, or click Import in the upper right of the {object} index page. Import one object's file at a time.",
@@ -392,9 +466,9 @@ export type CheckGuide = {
   filter?: FilterCondition[];
   // "none": the filter finds every record, so the playbook says "No CSV
   // needed". "import": use the finding's import file; the playbook points to
-  // the import steps in its appendix and cites their sources. "property":
-  // the properties are listed in the playbook.
-  csv: "none" | "import" | "property";
+  // the import steps in its appendix and cites their sources. "property"
+  // and "segment": the properties or segments are listed in the playbook.
+  csv: "none" | "import" | "property" | "segment";
   // The fix, in order.
   steps: GuidanceId[];
   // Steps that stop the problem coming back.
@@ -492,6 +566,18 @@ export const CHECK_GUIDES: Record<string, CheckGuide> = {
   "properties.dropdown-plural-variants": {
     csv: "property",
     steps: ["openProperty", "mergeOptions"],
+  },
+  "segments.filters-missing-property": {
+    csv: "segment",
+    steps: ["openSegments", "findSegment", "fixSegmentFilter", "restoreArchivedProperty"],
+  },
+  "segments.empty": {
+    csv: "segment",
+    steps: ["openSegments", "unusedSegmentsTab", "findSegment", "segmentUsedIn", "editSegmentFilters", "deleteSegment", "deleteSegmentGrayedOut"],
+  },
+  "segments.duplicate-names": {
+    csv: "segment",
+    steps: ["openSegments", "findSegment", "compareSegments", "renameSegment", "deleteSegment", "deleteSegmentGrayedOut"],
   },
 };
 

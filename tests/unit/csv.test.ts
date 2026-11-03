@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Finding } from "@/lib/checks/types";
-import { cleanupReason, csvCell, findingsCsv, importCsv, importFileName, toCsv, workListCsv, workListObjects } from "@/lib/csv";
+import { cleanupReason, csvCell, findingsCsv, hasSegmentRows, importCsv, importFileName, segmentsCsv, toCsv, workListCsv, workListObjects } from "@/lib/csv";
 import type { ScanReport } from "@/lib/scan";
 import { scoreChecks } from "@/lib/scoring";
 
@@ -189,5 +189,45 @@ describe("per-finding import file", () => {
 
   it("is named after the check", () => {
     assert.equal(importFileName(typos), "imports/contacts-malformed-email.csv");
+  });
+});
+
+describe("segments CSV", () => {
+  const empty = finding({
+    checkId: "segments.empty",
+    title: "Empty segments",
+    category: "Segments",
+    objectType: "segments",
+    severity: "low",
+    segments: [{ id: "74", name: "Audit Test Empty Static", detail: "static" }],
+  });
+  const names = finding({
+    checkId: "segments.duplicate-names",
+    title: "Segments with the same name",
+    category: "Segments",
+    objectType: "segments",
+    severity: "low",
+    segments: [
+      { id: "76", name: "Trade Show Leads", group: 1 },
+      { id: "77", name: "Trade show leads!", group: 1 },
+    ],
+  });
+
+  it("lists each flagged segment by ID and name, with its group or detail", () => {
+    assert.deepEqual(lines(segmentsCsv(report([empty, names]))), [
+      "Segment ID,Segment name,Check,Severity,Same-name group,Detail",
+      "74,Audit Test Empty Static,Empty segments,low,,static",
+      "76,Trade Show Leads,Segments with the same name,low,1,",
+      "77,Trade show leads!,Segments with the same name,low,1,",
+    ]);
+  });
+
+  it("is offered only when a segment check flagged something", () => {
+    assert.equal(hasSegmentRows(report([empty])), true);
+    assert.equal(hasSegmentRows(report([finding({ checkId: "contacts.missing-email" })])), false);
+  });
+
+  it("names segments in the findings CSV's Object column", () => {
+    assert.match(lines(findingsCsv(report([empty])))[1], /^Empty segments,Segments,Segments,low,/);
   });
 });

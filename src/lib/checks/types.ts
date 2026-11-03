@@ -2,17 +2,26 @@ import type { ObjectType } from "../hubspot/properties";
 
 export type Severity = "high" | "medium" | "low";
 
-export type Category = "Properties" | "Contacts" | "Companies" | "Deals";
+export type Category = "Properties" | "Contacts" | "Companies" | "Deals" | "Segments";
+
+// What a check looks at: a CRM object's records or properties, or the
+// portal's segments (lists).
+export type CheckObject = ObjectType | "segments";
 
 // One record in a finding's work list. Duplicates share a group number and
 // say which signals matched them ("same phone + nickname"), never the values.
 export type WorkRecord = { id: string; group?: number; signals?: string };
 
+// One segment in a segment finding, for the segments CSV. Segments with the
+// same name share a group number; `detail` says what's wrong ("static",
+// "contacts.region (archived)").
+export type SegmentRow = { id: string; name: string; group?: number; detail?: string };
+
 export type Finding = {
   checkId: string;
   title: string;
   category: Category;
-  objectType: ObjectType;
+  objectType: CheckObject;
   severity: Severity;
   // What the report shows: records, properties, or duplicate groups.
   count: number;
@@ -20,9 +29,10 @@ export type Finding = {
   // duplicates, affected counts records in groups, not groups.
   affected: number;
   population: number;
-  // Up to the sample cap. For property checks these are property names.
+  // Up to the sample cap. For property checks these are property names; for
+  // segment checks, segment IDs and names.
   samples: string[];
-  // Property checks: every affected item in the same form as samples, up to
+  // Property and segment checks: every affected item in the same form as samples, up to
   // the work-list cap, so the playbook can list them all.
   items?: string[];
   // Record checks: up to the sample cap of record ID groups. A group has one
@@ -31,6 +41,9 @@ export type Finding = {
   // Record checks: affected records for the work-list export, up to the
   // work-list cap. Fewer than `affected` means the list was capped.
   records?: WorkRecord[];
+  // Segment checks: affected segments for the segments CSV, up to the
+  // work-list cap.
+  segments?: SegmentRow[];
   // Duplicate checks: the most common signal combinations and how many
   // groups each matched.
   matchSummary?: { signals: string; groups: number }[];
@@ -53,7 +66,7 @@ export type CheckMeta = { checkId: string; title: string; severity: Severity; sc
 // need confirming).
 export type CheckRun = CheckMeta & {
   category: Category;
-  objectType: ObjectType;
+  objectType: CheckObject;
   status: "scored" | "skipped" | "empty" | "unscored";
   affected: number;
   population: number;
@@ -68,9 +81,9 @@ export const CATEGORY_FOR_OBJECT: Record<ObjectType, Category> = {
   deals: "Deals",
 };
 
-export const CATEGORY_ORDER: Category[] = ["Properties", "Contacts", "Companies", "Deals"];
+export const CATEGORY_ORDER: Category[] = ["Properties", "Contacts", "Companies", "Deals", "Segments"];
 
 // The same check can run on several objects (property checks), so runs and
 // findings are matched on check and object together.
-export const checkKey = (c: { checkId: string; objectType: ObjectType }) =>
+export const checkKey = (c: { checkId: string; objectType: CheckObject }) =>
   `${c.checkId}:${c.objectType}`;

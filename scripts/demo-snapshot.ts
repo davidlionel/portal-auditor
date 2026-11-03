@@ -40,14 +40,14 @@ async function main() {
   const { version } = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
   const snapshot: DemoSnapshot = { scannedAt: new Date().toISOString(), appVersion: version, report };
   const errors = validateSnapshot(snapshot);
-  if (errors.length) fail(`it contains something other than IDs, property names, counts and portal details:\n  ${errors.join("\n  ")}`);
+  if (errors.length) fail(`it contains something other than IDs, property and segment names, counts and portal details:\n  ${errors.join("\n  ")}`);
 
   const json = JSON.stringify(snapshot, null, 2) + "\n";
   writeFileSync(OUTPUT, json);
   const ids = report.findings.reduce((n, f) => n + (f.records?.length ?? 0), 0);
   console.log(`\nSaved ${OUTPUT} (${(json.length / 1024).toFixed(0)} KB), scanned ${snapshot.scannedAt}.`);
   console.log(`Portal ${report.portal.portalId}: ${report.findings.length} findings, ${ids} record IDs, score ${Math.round(report.score.overall ?? 0)}, ${report.apiCalls} API calls.`);
-  console.log("Checked: only record IDs, property names and labels, counts, check text and portal details.");
+  console.log("Checked: only record IDs, property names and labels, segment IDs and names, counts, check text and portal details.");
 }
 
 main().catch(() => fail(ERROR_MESSAGES.unexpected));

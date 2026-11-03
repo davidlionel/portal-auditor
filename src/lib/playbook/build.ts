@@ -11,10 +11,9 @@ import {
   type GuidanceId,
 } from "@/config/hubspot-guidance";
 import { rateText } from "../checks/population";
-import { CATEGORY_ORDER, checkKey, type Category, type Finding, type Severity } from "../checks/types";
-import { FINDINGS_HEADER, IMPORT_HEADER, WORK_LIST_HEADER, cleanupReason, importFileName, scanDay } from "../csv";
+import { CATEGORY_ORDER, checkKey, type Category, type CheckObject, type Finding, type Severity } from "../checks/types";
+import { FINDINGS_HEADER, IMPORT_HEADER, SEGMENTS_HEADER, WORK_LIST_HEADER, cleanupReason, importFileName, scanDay, segmentsFileName } from "../csv";
 import { accountTypeLabel } from "../hubspot/account-types";
-import type { ObjectType } from "../hubspot/properties";
 import type { ScanReport } from "../scan";
 import { topFixes } from "../scoring";
 import { COLUMN_NOTES, cleanupReasonNote, exportFiles, type ExportFile } from "./files";
@@ -67,7 +66,7 @@ export type Playbook = {
 // Scores print as whole numbers, as on the report.
 const round = (score: number | null) => (score === null ? null : Math.round(score));
 
-const OBJECT_LABELS: Record<ObjectType, string> = { contacts: "Contacts", companies: "Companies", deals: "Deals" };
+const OBJECT_LABELS: Record<CheckObject, string> = { contacts: "Contacts", companies: "Companies", deals: "Deals", segments: "Segments" };
 
 // "October 28, 2026", in UTC so it matches the scan day in file names.
 export const longDate = (iso: string) =>
@@ -114,6 +113,7 @@ function csvText(report: ScanReport, finding: Finding, files: ExportFile[]): str
     return "No CSV needed. The HubSpot filter in the steps finds every affected record, including any beyond the ones listed in the work list.";
   }
   if (guide?.csv === "property") return "No CSV needed. The properties to fix are listed above.";
+  if (guide?.csv === "segment") return `No CSV needed. The segments to fix are listed above, and in ${segmentsFileName(report)}.`;
 
   const path = importFileName(finding);
   if (!files.some((f) => f.path === path)) return "No records to import.";
@@ -138,7 +138,7 @@ function csvText(report: ScanReport, finding: Finding, files: ExportFile[]): str
 }
 
 function itemsFor(finding: Finding): { items: string[]; itemsNote?: string } {
-  if (finding.category !== "Properties") return { items: [] };
+  if (finding.category !== "Properties" && finding.category !== "Segments") return { items: [] };
   const items = finding.items ?? finding.samples;
   return items.length < finding.count
     ? { items, itemsNote: `Showing ${items.length} of ${finding.count.toLocaleString("en-US")}. Run a new scan for the full list.` }
@@ -211,4 +211,4 @@ export function buildPlaybook(report: ScanReport, { sample = false }: { sample?:
 
 // Every header the CSVs can have, so a test can check the appendix
 // describes them all.
-export const ALL_CSV_COLUMNS = [...new Set([...FINDINGS_HEADER, ...WORK_LIST_HEADER, ...IMPORT_HEADER])];
+export const ALL_CSV_COLUMNS = [...new Set([...FINDINGS_HEADER, ...WORK_LIST_HEADER, ...IMPORT_HEADER, ...SEGMENTS_HEADER])];

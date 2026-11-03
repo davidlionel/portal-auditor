@@ -8,6 +8,8 @@ import {
   importCsv,
   importFileName,
   playbookFileName,
+  segmentsCsv,
+  segmentsFileName,
   workListCsv,
   workListFileName,
   workListObjects,
@@ -39,6 +41,7 @@ describe("Download everything (ZIP)", () => {
       playbookFileName(report),
       findingsFileName(report),
       ...workListObjects(report).map((o) => workListFileName(report, o)),
+      segmentsFileName(report),
       ...importFindings(report).map(importFileName),
     ].map((path) => `${folder}/${path}`);
     assert.deepEqual(Object.keys(files).sort(), expected.sort());
@@ -52,6 +55,7 @@ describe("Download everything (ZIP)", () => {
     same(findingsFileName(report), findingsCsv(report));
     for (const o of workListObjects(report)) same(workListFileName(report, o), workListCsv(report, o));
     for (const f of importFindings(report)) same(importFileName(f), importCsv(report, f));
+    same(segmentsFileName(report), segmentsCsv(report));
     assert.equal(files[`${folder}/${findingsFileName(report)}`][0], 0xef, "starts with the byte-order mark");
   });
 

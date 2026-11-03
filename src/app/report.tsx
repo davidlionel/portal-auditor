@@ -14,6 +14,7 @@ const OBJECT_LABELS: Record<string, string> = {
   contacts: "Contacts",
   companies: "Companies",
   deals: "Deals",
+  segments: "Segments",
 };
 
 // Shown on the public sample report instead of record links.
@@ -124,7 +125,10 @@ function ScoreCard({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
 
       <p className={`${styles.note} ${styles.explanation}`}>{score.explanation}</p>
       <ul className={styles.notes}>
-        <li>Automation (lists and workflows) isn&apos;t checked yet, so it isn&apos;t part of the score.</li>
+        <li>
+          Workflows aren&apos;t checked: reading them needs HubSpot&apos;s automation scope, which can also
+          create and delete workflows.
+        </li>
         {skipped.map((c) => (
           <li key={`${c.checkId}-${c.objectType}`}>
             Not scored: {c.title}
@@ -164,7 +168,9 @@ function TopFixes({ report }: { report: ScanReport }) {
 }
 
 function Samples({ finding, portal, linked }: { finding: Finding; portal: AccountDetails; linked: boolean }) {
-  const groups = finding.recordSamples;
+  // Segment findings list segments, not records.
+  const recordObject = finding.objectType === "segments" ? null : finding.objectType;
+  const groups = recordObject ? finding.recordSamples : undefined;
   const shown = groups ? groups.length : finding.samples.length;
   return (
     <details className={styles.samples}>
@@ -172,13 +178,13 @@ function Samples({ finding, portal, linked }: { finding: Finding; portal: Accoun
         {shown < finding.count ? `First ${shown} of ${finding.count}` : `All ${finding.count}`}
       </summary>
       <ul>
-        {groups
+        {groups && recordObject
           ? groups.map((ids) => (
               <li key={ids.join("-")}>
                 {ids.map((id, i) => (
                   <span key={id}>
                     {i > 0 && " / "}
-                    <RecordId portal={portal} objectType={finding.objectType} id={id} linked={linked} />
+                    <RecordId portal={portal} objectType={recordObject} id={id} linked={linked} />
                   </span>
                 ))}
               </li>

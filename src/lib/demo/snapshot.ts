@@ -21,9 +21,10 @@ const ALLOWED_KEYS = {
   portal: ["portalId", "accountType", "timeZone", "companyCurrency", "uiDomain", "dataHostingLocation"],
   finding: [
     "checkId", "title", "category", "objectType", "severity", "count", "affected", "population",
-    "samples", "items", "recordSamples", "records", "matchSummary", "scored", "why", "fix",
+    "samples", "items", "recordSamples", "records", "segments", "matchSummary", "scored", "why", "fix",
   ],
   record: ["id", "group", "signals"],
+  segment: ["id", "name", "group", "detail"],
   matchSummary: ["signals", "groups"],
   check: ["checkId", "title", "severity", "scored", "category", "objectType", "status", "affected", "population", "reason"],
   score: ["overall", "categories", "pointsRecovered", "explanation"],
@@ -32,6 +33,9 @@ const ALLOWED_KEYS = {
 };
 
 const RECORD_ID = /^\d+$/;
+// A segment finding's line starts with the segment's ID and quoted name:
+// 74 "Audit Test Empty Static" (static).
+const SEGMENT_ITEM = /^\d+ ".*"/;
 const EMAIL = /[^\s@]+@[^\s@]+/;
 // Phone-shaped text such as "(415) 555-0142" or "+44 20 7946 0958". Record
 // IDs are plain digit strings and are checked separately.
@@ -47,8 +51,9 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 
 // Problems that would make the snapshot unsafe to publish; empty when it's
 // fine. Allowed: record IDs, property names and labels (including dropdown
-// option labels), counts, check text, scan notes and portal details. Never
-// record values such as names, emails or phone numbers.
+// option labels), segment IDs and names (configuration, like property
+// labels), counts, check text, scan notes and portal details. Never record
+// values such as names, emails or phone numbers.
 export function validateSnapshot(snapshot: unknown): string[] {
   const errors: string[] = [];
 
@@ -88,6 +93,21 @@ export function validateSnapshot(snapshot: unknown): string[] {
   findings.forEach((f, i) => {
     const where = `report.findings[${i}]`;
     if (!keys(f, ALLOWED_KEYS.finding, where)) return;
+    if (f.segments !== undefined && f.category !== "Segments") errors.push(`${where} lists segments but isn't a segment finding`);
+    if (f.category === "Segments") {
+      if (f.recordSamples !== undefined || f.records !== undefined) errors.push(`${where} is a segment finding with records`);
+      const rows = Array.isArray(f.segments) ? f.segments : [];
+      rows.forEach((s, j) => {
+        if (!keys(s, ALLOWED_KEYS.segment, `${where}.segments[${j}]`)) return;
+        if (typeof s.id !== "string" || !RECORD_ID.test(s.id)) errors.push(`${where}.segments[${j}].id is not a segment ID`);
+      });
+      for (const field of ["samples", "items"] as const) {
+        const list = Array.isArray(f[field]) ? (f[field] as unknown[]) : [];
+        if (list.some((s) => typeof s !== "string" || !SEGMENT_ITEM.test(s))) {
+          errors.push(`${where}.${field} has a line that isn't a segment ID and name`);
+        }
+      }
+    }
     if (f.recordSamples !== undefined) {
       const groups = Array.isArray(f.recordSamples) ? f.recordSamples : [];
       for (const id of groups.flat()) {

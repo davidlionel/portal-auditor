@@ -33,6 +33,28 @@ describe("validateSnapshot", () => {
     assert.ok(clean.report.findings.some((f) => f.samples.length), "fixture has property samples");
   });
 
+  it("accepts segment IDs and names", () => {
+    const segments = clean.report.findings.filter((f) => f.category === "Segments");
+    assert.equal(segments.length, 3, "fixture has every segment check");
+    assert.ok(segments.some((f) => f.items?.some((i) => i.includes('"Sim segment'))));
+  });
+
+  it("rejects a segment line that isn't an ID and a name, or a segment finding with records", () => {
+    const s = copy();
+    const finding = s.report.findings.find((f) => f.category === "Segments")!;
+    finding.items!.push("Maria Lopez");
+    finding.records = [{ id: "1" }];
+    const errors = validateSnapshot(s).join("\n");
+    assert.match(errors, /items has a line that isn't a segment ID and name/);
+    assert.match(errors, /segment finding with records/);
+  });
+
+  it("rejects an email address in a segment name", () => {
+    const s = copy();
+    s.report.findings.find((f) => f.category === "Segments")!.samples.push('80 "Leads from ana@gmial.com"');
+    assert.match(validateSnapshot(s).join("\n"), /email address/);
+  });
+
   it("rejects an email address anywhere", () => {
     const s = copy();
     s.report.findings[0].samples.push("ana@gmial.com");
