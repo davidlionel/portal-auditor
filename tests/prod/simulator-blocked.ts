@@ -51,6 +51,12 @@ async function main() {
     });
     const body = await response.text();
     results.push(["simulated scan refused with 403", response.status === 403 && /disabled/.test(body)]);
+    const estimate = await fetch(`${BASE}/api/scan/estimate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "simulated" }),
+    });
+    results.push(["simulated estimate refused with 403", estimate.status === 403 && /disabled/.test(await estimate.text())]);
 
     const browserCode = files(".next/static")
       .filter((f) => f.endsWith(".js"))

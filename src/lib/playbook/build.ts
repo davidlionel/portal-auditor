@@ -32,6 +32,8 @@ export type Section = {
   category: Category;
   severity: Severity;
   rate: string;
+  // Duplicate and email checks: which records were checked.
+  coverage?: string;
   points: number;
   // False for duplicates still to confirm: reported, not scored.
   scored: boolean;
@@ -154,6 +156,7 @@ function section(report: ScanReport, finding: Finding, number: number, files: Ex
     category: finding.category,
     severity: finding.severity,
     rate: rateText(finding),
+    ...(finding.coverage && { coverage: finding.coverage }),
     points: report.score.pointsRecovered[checkKey(finding)] ?? 0,
     scored: finding.scored !== false,
     why: finding.why,

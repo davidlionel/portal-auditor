@@ -63,17 +63,26 @@ function workList(groups: { ids: string[]; signals: string }[], cap: number): Wo
 }
 
 // Turns matched pairs into one finding per tier that found something.
+// `idOf` gives a row's record ID; `population` is how many were checked.
 export function duplicateFindings(
   objectType: DuplicateObject,
   matches: Match[],
-  ids: string[],
+  idOf: (row: number) => string,
+  population: number,
   config: ChecksConfig = CHECKS_CONFIG,
 ): Finding[] {
-  const groups = groupMatches(matches, config.duplicates.maxGroupSize);
+  // In record ID order, so the groups come out the same however the
+  // records arrived.
+  const byId = (row: number) => idOf(row).padStart(20, "0");
+  const ordered = matches
+    .map((m) => ({ m, key: [byId(m.a), byId(m.b)].sort().join(":") }))
+    .sort((x, y) => (x.key < y.key ? -1 : x.key > y.key ? 1 : 0))
+    .map(({ m }) => m);
+  const groups = groupMatches(ordered, config.duplicates.maxGroupSize);
   return TIERS.flatMap((tier) => {
     const inTier = groups
       .filter((g) => g.tier === tier)
-      .map((g) => ({ ids: g.rows.map((row) => ids[row]), signals: signalText(g.signals), strength: g.signals.length }))
+      .map((g) => ({ ids: g.rows.map(idOf), signals: signalText(g.signals), strength: g.signals.length }))
       // Largest groups first, then the ones with the most agreeing signals.
       .sort((a, b) => b.ids.length - a.ids.length || b.strength - a.strength);
     if (!inTier.length) return [];
@@ -87,7 +96,7 @@ export function duplicateFindings(
         count: inTier.length,
         // Every record in a group needs review, so a group of six weighs more than a pair.
         affected: new Set(inTier.flatMap((g) => g.ids)).size,
-        population: ids.length,
+        population,
         samples: [],
         recordSamples: inTier.slice(0, config.sampleCap).map((g) => g.ids.slice(0, MAX_IDS_PER_GROUP)),
         records: workList(inTier, config.records.workListCap),
@@ -110,11 +119,11 @@ export function checkDuplicateContacts(
 ): Finding[] {
   const store = new ContactStore(new Set(config.duplicates.freeEmailDomains));
   for (const row of rows) store.add(row);
-  return duplicateFindings("contacts", matchContacts(store, config, companyDomainOf).matches, store.ids, config);
+  return duplicateFindings("contacts", matchContacts(store, config, companyDomainOf).matches, store.idOf, store.size, config);
 }
 
 export function checkDuplicateCompanies(rows: SearchRow[], config: ChecksConfig = CHECKS_CONFIG): Finding[] {
   const store = new CompanyStore();
   for (const row of rows) store.add(row);
-  return duplicateFindings("companies", matchCompanies(store, config).matches, store.ids, config);
+  return duplicateFindings("companies", matchCompanies(store, config).matches, store.idOf, store.size, config);
 }

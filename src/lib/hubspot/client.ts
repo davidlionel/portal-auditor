@@ -1,6 +1,6 @@
 import { Client } from "@hubspot/api-client";
 import { RETRY_CONFIG, type RetryConfig } from "@/config/requests";
-import { retryDecision, sleep } from "./retry";
+import { backoffDelay, retryDecision, sleep } from "./retry";
 
 // Stable, date-versioned account-info endpoint. The SDK (v14) has no typed
 // client for it, so we call it through the generic apiRequest.
@@ -36,7 +36,45 @@ export type Transport = (request: {
   body?: unknown;
 }) => Promise<Response>;
 
-export type RetryWait = { delayMs: number; retry: number; maxRetries: number };
+export type RetryWait = {
+  delayMs: number;
+  retry: number;
+  maxRetries: number;
+  // What's being waited out: HubSpot's rate limit, or a server error or
+  // dropped connection on a call that retries those.
+  reason: "rate_limit" | "server_error";
+};
+
+// For long reads, where one failed call out of thousands shouldn't end the
+// check: retry 502/503/504 and network errors with the same backoff as a
+// 429, and give up on a call that hangs.
+export type RequestOptions = {
+  retryServerErrors?: boolean;
+  timeoutMs?: number;
+};
+
+const RETRIED_STATUSES = new Set([502, 503, 504]);
+
+// Settles with the transport's response, or rejects when the call takes
+// longer than `timeoutMs` or the scan is cancelled, so neither has to wait
+// for a hung connection.
+function withDeadline(call: Promise<Response>, timeoutMs: number | undefined, signal: AbortSignal | undefined) {
+  if (!timeoutMs && !signal) return call;
+  return new Promise<Response>((resolve, reject) => {
+    const timer = timeoutMs ? setTimeout(() => finish(() => reject(new Error("timeout"))), timeoutMs) : undefined;
+    const onAbort = () => finish(() => reject(new Error("cancelled")));
+    function finish(settle: () => void) {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      settle();
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    call.then(
+      (response) => finish(() => resolve(response)),
+      (error) => finish(() => reject(error)),
+    );
+  });
+}
 
 // Per-scan call tracking, passed in rather than global so two scans running
 // at once don't mix. `calls` counts every attempt, retries included.
@@ -93,9 +131,21 @@ export async function request<T>(
   method: "GET" | "POST",
   path: string,
   body?: unknown,
+  options: RequestOptions = {},
 ): Promise<HubSpotResult<T>> {
   const retry = tracker.retry ?? RETRY_CONFIG;
   const wait = tracker.sleep ?? sleep;
+  // Backs off before retrying a server error or dropped connection, when
+  // this call retries those. False when it shouldn't (or can't) retry.
+  const retryServerError = async (attempt: number) => {
+    if (!options.retryServerErrors || attempt + 1 > retry.maxRetries || tracker.signal?.aborted) return false;
+    const delayMs = backoffDelay(attempt + 1, retry);
+    tracker.retries++;
+    tracker.onRetryWait?.({ delayMs, retry: attempt + 1, maxRetries: retry.maxRetries, reason: "server_error" });
+    console.info(`[hubspot] server error; retry ${attempt + 1} of ${retry.maxRetries} in ${delayMs}ms`);
+    await wait(delayMs, tracker.signal);
+    return true;
+  };
   for (let attempt = 0; ; attempt++) {
     if (tracker.signal?.aborted) return { ok: false, kind: "cancelled" };
 
@@ -103,16 +153,22 @@ export async function request<T>(
     const started = performance.now();
     tracker.calls++;
     try {
-      response = await transport({ method, path, body });
+      response = await withDeadline(transport({ method, path, body }), options.timeoutMs, tracker.signal);
     } catch {
-      // Network failure. Deliberately drop the error: it can carry request
-      // details, and the token must never reach logs or the browser.
-      logCall(method, path, "network error", started);
+      // Network failure, timeout or cancel. Deliberately drop the error: it
+      // can carry request details, and the token must never reach logs or
+      // the browser.
+      const cancelled = tracker.signal?.aborted;
+      logCall(method, path, cancelled ? "cancelled" : "network error", started);
       tracker.onCall?.();
+      if (cancelled) return { ok: false, kind: "cancelled" };
+      if (await retryServerError(attempt)) continue;
       return { ok: false, kind: "hubspot_unavailable" };
     }
     logCall(method, path, response.status, started);
     tracker.onCall?.();
+
+    if (RETRIED_STATUSES.has(response.status) && (await retryServerError(attempt))) continue;
 
     if (response.status === 429) {
       const decision = retryDecision(
@@ -123,7 +179,7 @@ export async function request<T>(
       );
       if (decision.action === "give_up") return { ok: false, kind: decision.kind, status: 429 };
       tracker.retries++;
-      tracker.onRetryWait?.({ delayMs: decision.delayMs, retry: attempt + 1, maxRetries: retry.maxRetries });
+      tracker.onRetryWait?.({ delayMs: decision.delayMs, retry: attempt + 1, maxRetries: retry.maxRetries, reason: "rate_limit" });
       console.info(`[hubspot] rate limited; retry ${attempt + 1} of ${retry.maxRetries} in ${decision.delayMs}ms`);
       await wait(decision.delayMs, tracker.signal);
       continue;

@@ -6,7 +6,7 @@
 
 A web app that connects to a HubSpot portal with a read-only service key, scans it for data and configuration problems, and returns a health score with a ranked fix list.
 
-**Status:** early build. The app runs property and record checks on contacts, companies and deals, and checks the portal's segments (lists). It scores the portal out of 100, lists the top 5 fixes, and exports CSVs and a step-by-step cleanup playbook (PDF).
+**Status:** early build. The app runs property and record checks on contacts, companies and deals, and checks the portal's segments (lists). It scores the portal out of 100, lists the top 5 fixes, and exports CSVs and a step-by-step cleanup playbook (PDF). An optional [full duplicate scan](#full-duplicate-scan) checks every contact and company instead of the newest 10,000.
 
 The deployed site is **demo-only**: it shows a sample report from a HubSpot developer test portal and never accepts a service key. To scan your own portal, [run it on your machine](#run-it-on-your-own-portal).
 
@@ -64,9 +64,38 @@ Two records whose first names differ (Emma and Oliver Clark) never match. Safegu
 
 Each group lists which signals agreed ("same phone + same email domain + nickname"), never the values. High groups go to Manage duplicates, or to the record's Merge action on any plan. Medium and Low go to the record owners to confirm first. All thresholds are in `src/config/checks.ts`.
 
-**Cost and memory.** Only records that share a phone, email domain, company name or company are compared, and in groups over 50 only those with similar names, so the work grows in line with the number of records. Each page of 200 records is reduced to normalized names and numeric keys as it arrives and then dropped. Nothing is written to disk, and the keys are gone when the scan ends.
+**Cost and memory.** Only records that share a phone, email domain, company name or company are compared, and in groups over 50 only those with similar names, so the work grows in line with the number of records. Each page of records is reduced as it arrives to compact columns (record IDs as numbers, names packed one byte a character, everything else as numeric hashes, about 78 bytes a contact) and then dropped. Matching works through one key type at a time, in passes of about 200,000 keys held in typed arrays reused from pass to pass; records sharing a key always land in the same pass, so splitting the work never misses a pair. It hands control back about every 40 ms, so progress updates and Cancel get through. Nothing is written to disk, and the keys are gone when the scan ends.
 
-Measured with `npm run bench:dedupe`, in a worst case where every contact shares one email domain: the keys take about 110 bytes per contact, and matching 10,000 contacts (the window) peaks at about 23 MB and takes about 0.15 s. The window keeps that the same for any portal size. On the simulated 250K portal, the whole scan's peak memory rose from about 16 MB to about 49 MB above its starting point, with no extra API calls and no measurable change in scan time. Matching every contact in a portal, which the scan doesn't do, would peak at about 330 MB for 250,000 contacts and 930 MB for 1,000,000.
+Measured with `npm run bench:dedupe`, in a worst case where every contact shares one email domain (peak is the whole process's, above its starting point, including the throwaway objects of the pages read):
+
+| Contacts | Keys held | Per contact | Peak memory | Matching time | Longest pause |
+|---|---|---|---|---|---|
+| 10,000 | 1.0 MB | 102 bytes | 40 MB | 0.15 s | 45 ms |
+| 250,000 | 20 MB | 82 bytes | 206 MB | 6.0 s | 42 ms |
+| 500,000 | 41 MB | 86 bytes | 264 MB | 13.1 s | 42 ms |
+| 1,000,000 | 74 MB | 78 bytes | 316 MB | 29.3 s | 46 ms |
+
+The normal scan matches at most 10,000 of each object, so its cost is the first row whatever the portal's size. Before the matcher worked in passes, matching 1,000,000 contacts peaked at 932 MB and took 38 s, with the server unresponsive throughout. A test confirms the rewrite finds exactly the same pairs, tiers and signals as before at 10K, 250K and 1M contacts.
+
+## Full duplicate scan
+
+Running locally, the key form has a **Full duplicate scan (slower)** option, off by default. With it ticked, the contact and company duplicate checks (and the malformed-email check, which reads the same rows) cover every record instead of the newest 10,000. The tiers, signals, controls and privacy rules are the same; only the coverage changes, and the report, the playbook and the scan details say which it was: "Checked all 500,000 contacts." or "Checked the newest 10,000 of 500,000 contacts."
+
+- **An estimate first.** Run scan first counts contacts and companies and reads the portal's rate limits (about four calls), then shows the API calls, the share of the daily allowance and the time, with **Start full scan** and **Back**. It warns if the scan would use more than half of what's left of today's allowance, and won't start if it would use more than what's left. On a portal with 10,000 or fewer of each, it says every record is already checked and runs the normal scan.
+- **Every record, three calls at a time.** HubSpot's Search API stops at 10,000 results, so the full scan reads with the basic list endpoint, 100 records a call (HubSpot's maximum), in record ID order. The ID range is split into about 24 pieces of similar size using Search counts, and three pieces are read at a time, never faster than 80% of the burst limit HubSpot reports in its response headers.
+- **Keep the tab open.** The page asks the browser to keep the screen awake while a full scan runs (the Screen Wake Lock API); where the browser can't, it says to keep the computer from sleeping. The progress card shows the time left once the scan has run 30 seconds.
+- **If HubSpot's limit runs out partway**, the scan matches the records it read, lists those findings as not scored, and says so: "Checked 600,000 of 1,000,000 contacts, before HubSpot's rate limit stopped the read." Matching part of the portal can only miss pairs, never invent them.
+- **Local only.** A full scan of a large portal runs for half an hour or more, longer than a hosted function may run, so the option is hidden, and refused, on Vercel.
+
+Measured with `npm run test:full-scan` on the simulator, through the real scan endpoint in real time: list pages take 250–650 ms (as measured on a test portal), the burst limit is enforced over a rolling 10 seconds at 190 calls (Professional and Enterprise), searches get occasional 429s and list calls occasional 502s. **Not yet run on a real portal of this size.**
+
+| Simulated portal | Time | API calls | Retries | Peak memory | Longest gap between updates |
+|---|---|---|---|---|---|
+| 100K contacts, 12K companies | 5 min 9 s (estimate about 5 min) | 1,561 (estimate about 1,542) | 12 | 93 MB | 5.3 s |
+| 500K contacts, 60K companies | 17 min 3 s (estimate about 17 min) | 6,070 (estimate about 6,022) | 17 | 289 MB | 4.8 s |
+| 1M contacts, 120K companies | Run pending (estimate about 31 min) | Run pending (estimate about 11,622) | Run pending | Run pending | Run pending |
+
+Peak memory is the whole process's, above its starting point. In both finished runs no list call hit the burst limit (the retries were the simulator's injected 429s on searches and 502s on list calls), progress never moved more than 2 points at a time and was at 50% at half time, and the key appeared nowhere in the stream or logs. The 500K report found 7,525 High contact duplicate groups and 1,326 High company groups, including the pairs planted across the old and new ends of the portal that the normal scan can't see. On the 100K portal, two in flight took 6 min 23 s and 1,524 calls; a Starter portal's limit (100 per 10 seconds) took the same time as 190, since three in flight stay under both; Cancel ended the stream at once; and with the daily limit running out halfway, the report checked 48,875 of 100,000 contacts, said so, and left those findings unscored.
 
 ## Health score
 
@@ -144,7 +173,7 @@ The key is pasted into the page for each scan and never saved.
 | Scope | Used for | Why |
 |---|---|---|
 | `crm.schemas.contacts.read`, `crm.schemas.companies.read`, `crm.schemas.deals.read` | `GET /crm/properties/2026-09/{object}` | List property definitions: labels, descriptions, dropdown options |
-| `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search` | Count records for fill rates and record checks; read name, company, email, phone, mobile phone and associated company ID on recent contacts, and domain, additional domains, name and location on recent companies, for duplicate and email checks |
+| `crm.objects.contacts.read`, `crm.objects.companies.read`, `crm.objects.deals.read` | `POST /crm/objects/2026-09/{object}/search`; for a full duplicate scan, also `GET /crm/objects/2026-09/{object}` | Count records for fill rates and record checks; read name, company, email, phone, mobile phone and associated company ID on recent contacts, and domain, additional domains, name and location on recent companies, for duplicate and email checks |
 | `crm.lists.read` | `POST /crm/lists/2026-09/all`, `GET /crm/lists/2026-09?listIds=…&includeFilters=true` | Segment names, sizes, ages and filter definitions for the segment checks. Never the records in a segment |
 | the schemas scopes above | `GET /crm/properties/2026-09/{object}/{name}?archived=true` (then `?dataSensitivity=sensitive` and `highly_sensitive`) | Only for a property a segment filters on that isn't in the property list: is it archived, sensitive, or gone? |
 | none listed in HubSpot's docs | `GET /account-info/2026-09/details` | Confirms which portal is connected (Hub ID, account type, data center) |
@@ -153,7 +182,7 @@ Every scope is read-only. If one is missing, the scan skips that object or check
 
 ### Deploying your own copy
 
-Live scanning is on by default, except on Vercel: the app turns it off when Vercel's automatic `VERCEL` environment variable is present, which is how the public demo shows the sample only, refuses keys and needs no setting. To accept keys on your own Vercel deployment, add the environment variable `ENABLE_LIVE_SCAN=true` and redeploy (the home page reads the setting at build time; the scan endpoint checks it on every request). `ENABLE_LIVE_SCAN=false` turns scanning off anywhere. The `VERCEL` variable is only set when the project's **Enable access to System Environment Variables** setting is on, which is the default; `npm run check:deploy -- <url>` confirms a deployment refuses keys.
+Live scanning is on by default, except on Vercel: the app turns it off when Vercel's automatic `VERCEL` environment variable is present, which is how the public demo shows the sample only, refuses keys and needs no setting. To accept keys on your own Vercel deployment, add the environment variable `ENABLE_LIVE_SCAN=true` and redeploy (the home page reads the setting at build time; the scan endpoint checks it on every request). `ENABLE_LIVE_SCAN=false` turns scanning off anywhere. The full duplicate scan stays off on Vercel either way, since it runs longer than a function may. The `VERCEL` variable is only set when the project's **Enable access to System Environment Variables** setting is on, which is the default; `npm run check:deploy -- <url>` confirms a deployment refuses keys.
 
 ### Refresh the sample report
 
@@ -173,7 +202,7 @@ To watch a full-size scan without a big portal, turn on the built-in simulator. 
 ENABLE_SIMULATOR=true
 ```
 
-Then run `npm run dev`. A **Run simulated 250K scan** button appears under the key field. It scans a fake portal (250,000 contacts, 30,000 companies, 15,000 deals, 300 custom properties) with HubSpot-like response times and occasional rate limits, so it takes about two and a half minutes. The progress bar and the report show a **SIMULATED PORTAL** banner, and no HubSpot calls are made. Delete the line or the file to turn it off.
+Then run `npm run dev`. A **Run simulated 250K scan** button appears under the key field. It scans a fake portal (250,000 contacts, 30,000 companies, 15,000 deals, 300 custom properties) with HubSpot-like response times and occasional rate limits, so it takes about two and a half minutes (about seven with **Full duplicate scan** ticked). The progress bar and the report show a **SIMULATED PORTAL** banner, and no HubSpot calls are made. Delete the line or the file to turn it off.
 
 The simulator only runs when **both** are true: the app is a development build (`npm run dev`) and `ENABLE_SIMULATOR=true`. A production build (`npm run build` then `npm start`, or a deployment) ignores the flag, even though Next.js reads `.env.local` there too. The simulator code runs only on the server and never reaches the browser.
 
@@ -183,21 +212,22 @@ The simulator only runs when **both** are true: the app is a development build (
 npm test
 ```
 
-Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels, "Webinar 2025" / "Webinar 2026" segments, a sensitive property HubSpot won't look up), the cases that must be caught (Webinar / webinar, Trade Show Leads / Trade show leads!), and the 30-day age rules for fill rate and empty segments. The duplicate tests plant a case for every tier and the controls that must never reach High: two John Smiths at different companies, siblings sharing a home phone, a switchboard number on 20 contacts, free email domains, and two John Smiths on a large company's email domain. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names, emails, phone numbers, domains or locations it returned appear in the playbook, the PDF or any file in the ZIP.
+Unit tests run each check, the scoring, the CSV exports, the playbook, its PDF and ZIP, the HubSpot guidance file, the 429 retry logic, the full read (every record read once across uneven ID clusters, three calls in flight, the rate cap, 502s, cancelling, partial reads), the matcher in passes (identical results in one pass or hundreds), the full-scan estimate, the progress bar's maths, the scan endpoint and the simulator guard against fixtures, with no HubSpot key or network. They use Node's built-in test runner through [tsx](https://tsx.is). They cover known false positives that must stay unflagged (Japanese / Javanese dropdown options, "Region 1" / "Region 2" labels, "Webinar 2025" / "Webinar 2026" segments, a sensitive property HubSpot won't look up), the cases that must be caught (Webinar / webinar, Trade Show Leads / Trade show leads!), and the 30-day age rules for fill rate and empty segments. The duplicate tests plant a case for every tier and the controls that must never reach High: two John Smiths at different companies, siblings sharing a home phone, a switchboard number on 20 contacts, free email domains, and two John Smiths on a large company's email domain. Each check takes an optional config, so tests can try other thresholds without changing the ones the app uses. The playbook tests render the real PDF and read its text back with [unpdf](https://github.com/unjs/unpdf), unzip the real ZIP, and scan the small simulated portal end to end to confirm none of the record names, emails, phone numbers, domains or locations it returned appear in the playbook, the PDF or any file in the ZIP.
 
 Slower checks run separately. Both are plain Node scripts, so they work the same in PowerShell, cmd and bash:
 
 ```bash
 npm run test:scale            # full scan of the simulated 250K portal, then segments at 50, 500 and 5,000, about 3 minutes
-npm run bench:dedupe          # duplicate matching memory and time at 10K, 250K and 1M contacts
+npm run bench:dedupe          # duplicate matching memory and time at 10K, 250K, 500K and 1M contacts
+npm run test:full-scan -- 1m  # full duplicate scan of a simulated 1M portal in real time (1m, 500k or 100k; --cancel, --stop)
 npm run check:simulator-prod  # builds for production and proves the simulator is blocked
 npm run check:deploy -- <url> # checks a running site is demo-only (default http://localhost:3000)
 npm run check:hubspot-docs    # checks the HubSpot pages the playbook cites (needs internet)
 ```
 
-The deploy check confirms the home page has no key field, `/demo` renders the sample with a score, the scan-date banner, the playbook and ZIP buttons and no HubSpot record links, `/api/scan` refuses a service key and the simulator with 403, and none of the simulator's code is in the browser scripts.
+The deploy check confirms the home page has no key field, `/demo` renders the sample with a score, the scan-date banner, the playbook and ZIP buttons and no HubSpot record links, `/api/scan` refuses a service key, the simulator and a full duplicate scan with 403, `/api/scan/estimate` refuses a key, the home page has no full-scan option, and none of the simulator's code is in the browser scripts.
 
-The production check starts the built app with `ENABLE_SIMULATOR=true` and confirms the page has no simulator button, `/api/scan` refuses a simulated scan with 403, and no simulator code is in the browser bundles.
+The production check starts the built app with `ENABLE_SIMULATOR=true` and confirms the page has no simulator button, `/api/scan` and `/api/scan/estimate` refuse a simulated scan with 403, and no simulator code is in the browser bundles.
 
 ## Why a service key
 
@@ -220,7 +250,7 @@ When live scanning is on (running locally), the service key is used for one scan
 
 The scan streams its progress while it runs: one JSON line per update (NDJSON), then the report as the last line. The bar shows the current step (for example "Measuring contact fill rates · 120 of 200"), a percentage, the API calls so far including retries, and the elapsed time.
 
-The percentage is HubSpot calls done ÷ calls planned. A short setup step reads the account, property lists and record totals first, so the scan knows nearly every call it will make before the checks start. When a check finds more matching records than one page holds, its extra pages are added to the plan. The percentage never goes backwards and only reaches 100 when the report is ready.
+The percentage is HubSpot calls done ÷ calls planned. A short setup step reads the account, property lists and record totals first, so the scan knows nearly every call it will make before the checks start. When a check finds more matching records than one page holds, its extra pages are added to the plan. The percentage never goes backwards and only reaches 100 when the report is ready. Duplicate matching, which makes no calls, moves the bar in proportion to its expected time. If nothing has been sent for 5 seconds (a long retry wait, or matching a million contacts), the latest progress is sent again, and after 30 seconds the card shows the time left at the pace so far.
 
 ## Rate limits
 
@@ -229,6 +259,7 @@ HubSpot returns 429 when a limit is hit, with the limit's name in the response (
 - **Retries 10-second-window limits** up to 5 times, waiting 1, 2, 4, 8, then 10 seconds, plus up to 25% at random. If HubSpot sends a `Retry-After` header (its docs don't promise one), the scan waits exactly that long, unless it's over 30 seconds, in which case it stops instead of hanging.
 - **Doesn't retry the daily limit.** Waiting seconds can't fix it. HubSpot resets it at midnight in the portal's time zone.
 - **Keeps the whole queue waiting.** Searches run one at a time, so a retry pauses every search behind it rather than letting them pile up.
+- **In a full duplicate scan**, list calls run three at a time, never faster than 80% of the burst limit HubSpot reports in each response (`X-HubSpot-RateLimit-Max` per `X-HubSpot-RateLimit-Interval-Milliseconds`), or 80 per 10 seconds until a response says. They also retry 502, 503 and 504 errors, dropped connections and calls that hang for 30 seconds, with the same backoff, since a few are likely across thousands of calls.
 - **Stops cleanly when retries run out.** The scan makes no more calls and returns what it has: the report is marked **Incomplete: HubSpot rate limit** at the top, the checks that didn't run are listed as not scored, and the score covers only the checks that finished.
 
 Every attempt counts toward the report's API call total, and retries are shown separately. Retry settings live in `src/config/requests.ts`.
@@ -243,7 +274,7 @@ Everything that is a count uses the CRM Search API's `total`, so no records are 
 
 **Segment checks** read every segment's name, size and age, 500 per call, then the filter definitions of the active segments, 100 per call. Properties a filter uses that aren't in the property lists are looked up one at a time (up to 3 calls each, at most 25 properties). If HubSpot refuses a lookup (403, as for a sensitive property the key can't see), the property is noted in the scan details as not verified and the segment isn't flagged. Filters on events, tickets and custom objects aren't checked, and the report says how many there were.
 
-Duplicate and email checks need field values, so they read a **window of the most recently created records**: up to 10,000 contacts and 10,000 companies (200 per call), requesting only the fields they compare (optional ones only when the portal has them). Each page is reduced to matching keys and dropped, and only records sharing a key are compared (see [Duplicate detection](#duplicate-detection)). The keys stay in server memory during the scan; the report shows record IDs only.
+Duplicate and email checks need field values, so they read a **window of the most recently created records**: up to 10,000 contacts and 10,000 companies (200 per call), requesting only the fields they compare (optional ones only when the portal has them). A [full duplicate scan](#full-duplicate-scan) reads every contact and company instead, with the basic list endpoint (100 per call): two searches find the lowest and highest record ID, up to 100 search counts split the IDs into pieces, then about one call per 100 records. Each page is reduced to matching keys and dropped, and only records sharing a key are compared (see [Duplicate detection](#duplicate-detection)). The keys stay in server memory during the scan; the report shows record IDs only.
 
 Search calls run one at a time, at least 250ms apart, to stay under HubSpot's limit of 5 search requests per second per account. Each report shows the number of API calls and the scan time.
 
@@ -276,10 +307,10 @@ The window keeps duplicate checks at a fixed cost, so a portal with 1 million co
 
 ## What the record checks can miss
 
-- **Duplicates outside the window.** In a 250K-contact portal the window is the newest 4% of contacts, so a duplicate is only found when both records are recent. The report states the coverage on every scan. On Professional and Enterprise plans, HubSpot's Manage duplicates tool (CRM > Contacts or Companies, three vertical dots icon > Manage duplicates) checks the whole portal.
+- **Duplicates outside the window.** In a 250K-contact portal the window is the newest 4% of contacts, so a duplicate is only found when both records are recent, unless you run the [full duplicate scan](#full-duplicate-scan). The report states the coverage on every scan. On Professional and Enterprise plans, HubSpot's Manage duplicates tool (CRM > Contacts or Companies, three vertical dots icon > Manage duplicates) checks the whole portal.
 - **Records that share nothing but a similar name.** Pairs are only compared when they share a phone, email domain, company name or company, so two records with the same name and nothing else in common aren't matched.
 - **Different company names.** "Acme Corp" and "Acme Holdings" are different company names; a pair needs another signal to match.
-- **Companies outside the company window.** A contact's company domain is only known when the company is among the 10,000 most recent companies. The associated company ID comes from `associatedcompanyid`, which isn't in HubSpot's current docs, so it's only read when the portal's property list has it.
+- **Companies outside the company window.** A contact's company domain is only known when the company is among the 10,000 most recent companies (or, in a full duplicate scan, any company). The associated company ID comes from `associatedcompanyid`, which isn't in HubSpot's current docs, so it's only read when the portal's property list has it.
 - **Nicknames not in the table.** The nickname table is hand-written and English-only.
 - **Won deals on the company only.** "Customer with no closed-won deal" only sees deals associated with the contact.
 - **Recently closed deals.** HubSpot updates a contact's deal close date, and its search index, a short while after a deal closes, so a deal won in the last few minutes can still show its contact under "Customer with no closed-won deal".

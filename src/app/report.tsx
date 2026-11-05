@@ -93,6 +93,7 @@ function ScoreCard({ report, demo }: { report: ScanReport; demo?: DemoInfo }) {
             {accountTypeLabel(report.portal.accountType)}
           </span>
         )}
+        {report.fullDuplicates && <span className={styles.badge}>Full duplicate scan</span>}
       </div>
       <div className={styles.scoreHeader}>
         {score.overall === null ? (
@@ -260,6 +261,7 @@ export function Report({ report, demo }: { report: ScanReport; demo?: DemoInfo }
                     {report.score.pointsRecovered[checkKey(f)] ? ` · fixing it: ${points(report.score.pointsRecovered[checkKey(f)])}` : ""}
                     {f.scored === false ? " · not scored until confirmed" : ""}
                   </p>
+                  {f.coverage && <p className={styles.note}>{f.coverage}</p>}
                   {f.matchSummary?.length ? (
                     <p className={styles.findingText}>
                       <strong>Why they matched:</strong>{" "}

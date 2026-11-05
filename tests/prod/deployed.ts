@@ -1,7 +1,7 @@
 // Checks a running deployment is demo-only and safe: the sample report
-// renders with no record links, the scan endpoint refuses service keys and
-// the simulator, and no simulator code is served. Plain Node, so it works in
-// PowerShell and bash.
+// renders with no record links, the scan endpoints refuse service keys, the
+// simulator and full duplicate scans, and no simulator code is served.
+// Plain Node, so it works in PowerShell and bash.
 // Run with: npm run check:deploy -- https://your-site.vercel.app
 // (defaults to http://localhost:3000 for a local `npm start`).
 
@@ -9,8 +9,8 @@ const BASE = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 // Strings that exist only in the simulator's code.
 const SIMULATOR_ONLY = ["acmegrinding.example", "Simulated property.", "ten_secondly_rolling limit"];
 
-async function scan(body: unknown): Promise<{ status: number; text: string }> {
-  const response = await fetch(`${BASE}/api/scan`, {
+async function scan(body: unknown, path = "/api/scan"): Promise<{ status: number; text: string }> {
+  const response = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -28,6 +28,7 @@ async function main() {
   results.push(["home page links to the sample report", homeHtml.includes('href="/demo"')]);
   results.push(["home page has no service-key field", !homeHtml.includes('name="token"')]);
   results.push(["home page has no simulated-scan button", !homeHtml.includes("Run simulated 250K scan")]);
+  results.push(["home page has no full duplicate scan option", !homeHtml.includes("Full duplicate scan")]);
   const named = (html: string) => html.includes("<title>") && /<title>[^<]*Health Check for HubSpot<\/title>/.test(html) && !/Portal Health Auditor/.test(html);
   const scoped = (html: string) =>
     html.includes("never changes anything") &&
@@ -63,6 +64,10 @@ async function main() {
   results.push(["scan endpoint refuses a service key (403)", live.status === 403 && /sample report only/.test(live.text)]);
   const simulated = await scan({ mode: "simulated" });
   results.push(["scan endpoint refuses the simulator (403)", simulated.status === 403]);
+  const full = await scan({ token: "pat-na1-00000000-0000-0000-0000-000000000000", fullDuplicates: true });
+  results.push(["scan endpoint refuses a full duplicate scan (403)", full.status === 403]);
+  const estimate = await scan({ token: "pat-na1-00000000-0000-0000-0000-000000000000", fullDuplicates: true }, "/api/scan/estimate");
+  results.push(["full scan estimate refuses a service key (403)", estimate.status === 403]);
 
   // Every script the two pages load.
   const scripts = [...new Set([...`${homeHtml}${demoHtml}`.matchAll(/src="(\/_next\/static\/[^"]+\.js)"/g)].map((m) => m[1]))];

@@ -23,6 +23,32 @@ export function hashKey(s: string): number {
   return 4294967296 * (2097151 & h2) + (h1 >>> 0) || 1;
 }
 
+// hashKey(`${a}:${b}:${c}`) (or `${a}:${b}` when c is null), with the
+// character at `skipIndex` of part `skipPart` left out, without building
+// the string. Matching makes millions of these similar-name keys, so this
+// keeps them from becoming garbage.
+export function hashJoined(a: string, b: string, c: string | null, skipPart = -1, skipIndex = -1): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  const parts = c === null ? 2 : 3;
+  for (let part = 0; part < parts; part++) {
+    const s = part === 0 ? a : part === 1 ? b : (c as string);
+    if (part > 0) {
+      h1 = Math.imul(h1 ^ 58, 2654435761);
+      h2 = Math.imul(h2 ^ 58, 1597334677);
+    }
+    for (let i = 0; i < s.length; i++) {
+      if (part === skipPart && i === skipIndex) continue;
+      const ch = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0) || 1;
+}
+
 // The last 10 digits of a phone number, so "+1 (415) 555-0142" and
 // "415.555.0142" match. Numbers with fewer than 10 digits are too short to
 // compare safely and give "".

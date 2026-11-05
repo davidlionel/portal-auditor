@@ -14,18 +14,31 @@ const elapsed = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
+// Time left at the pace so far, once there's enough to go on.
+function timeLeft(percent: number, elapsedMs: number): string | null {
+  if (elapsedMs < 30_000 || percent < 5 || percent >= 99) return null;
+  const minutes = Math.round((elapsedMs * (100 - percent)) / percent / 60_000);
+  return minutes < 1 ? "under a minute left" : `about ${minutes} min left`;
+}
+
 export function ProgressCard({
   progress,
   simulated,
   elapsedMs,
+  full = false,
+  wakeLock = null,
   onCancel,
 }: {
   progress?: ProgressEvent;
   simulated: boolean;
   elapsedMs: number;
+  // A full duplicate scan, and whether the screen wake lock is holding.
+  full?: boolean;
+  wakeLock?: "held" | "unavailable" | null;
   onCancel: () => void;
 }) {
   const percent = progress?.percent ?? 0;
+  const left = timeLeft(percent, elapsedMs);
   return (
     <section className={styles.card} aria-label="Scan progress">
       {simulated && <SimulatedBanner />}
@@ -46,7 +59,18 @@ export function ProgressCard({
         API calls: {progress?.apiCalls ?? 0}
         {progress?.retries ? ` (${progress.retries} ${progress.retries === 1 ? "retry" : "retries"})` : ""} ·
         Elapsed {elapsed(elapsedMs)}
+        {left ? ` · ${left}` : ""}
       </p>
+      {full && (
+        <p className={styles.note}>
+          Full duplicate scan: keep this tab open.{" "}
+          {wakeLock === "held"
+            ? "The screen is kept awake while it runs."
+            : wakeLock === "unavailable"
+              ? "This browser can't keep the computer awake, so stop it from sleeping until the scan finishes."
+              : ""}
+        </p>
+      )}
     </section>
   );
 }

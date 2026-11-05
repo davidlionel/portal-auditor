@@ -1,7 +1,26 @@
 import type { ChecksConfig } from "@/config/checks";
 import type { SearchRow } from "@/lib/hubspot/search";
-import { companyNameKey, deletionVariants, emailDomain, hashKey, isNickname, nicknameGroups, oneTypoApart, personNameKey, phoneKey } from "./keys";
-import { Column, KeyList, MatchSet, capTier, compareBlock, type Match, type Signal, type Tier } from "./match";
+import { companyNameKey, emailDomain, hashJoined, hashKey, isNickname, nicknameGroups, oneTypoApart, personNameKey, phoneKey } from "./keys";
+import {
+  Column,
+  IdColumn,
+  MatchSet,
+  TextColumn,
+  allRows,
+  byKey,
+  capTier,
+  compareBlock,
+  eachBlock,
+  keysHeldBy,
+  passesFor,
+  runSync,
+  type Counter,
+  type KeyEmitter,
+  type Match,
+  type Signal,
+  type Steps,
+  type Tier,
+} from "./match";
 
 // Contact fields the duplicate check reads. associatedcompanyid isn't in
 // HubSpot's current docs, so it's only requested when the portal's
@@ -10,23 +29,39 @@ export const CONTACT_MATCH_PROPERTIES = ["firstname", "lastname", "company", "em
 export const CONTACT_OPTIONAL_PROPERTIES = ["phone", "mobilephone", "associatedcompanyid"];
 
 // The minimum each contact needs for matching: normalized first and last
-// name, and hashes of the rest. Built page by page as records arrive; the
-// raw values are dropped with the page.
+// name, and hashes of the rest, in compact columns (about 85 bytes a
+// contact). Built page by page as records arrive; the raw values are
+// dropped with the page. `capacity` sizes the columns when the record count
+// is known.
 export class ContactStore {
-  readonly ids: string[] = [];
-  readonly first: string[] = [];
-  readonly last: string[] = [];
-  readonly phone1 = new Column();
-  readonly phone2 = new Column();
-  readonly emailDomain = new Column();
-  readonly company = new Column();
-  readonly companyId = new Column();
+  readonly ids: IdColumn;
+  readonly first: TextColumn;
+  readonly last: TextColumn;
+  readonly phone1: Column;
+  readonly phone2: Column;
+  readonly emailDomain: Column;
+  readonly company: Column;
+  readonly companyId: Column;
 
-  constructor(private freeDomains: Set<string>) {}
+  constructor(
+    private freeDomains: Set<string>,
+    capacity?: number,
+  ) {
+    this.ids = new IdColumn(capacity);
+    this.first = new TextColumn(capacity);
+    this.last = new TextColumn(capacity);
+    this.phone1 = new Column(capacity);
+    this.phone2 = new Column(capacity);
+    this.emailDomain = new Column(capacity);
+    this.company = new Column(capacity);
+    this.companyId = new Column(capacity);
+  }
 
   get size() {
     return this.ids.length;
   }
+
+  idOf = (row: number) => this.ids.get(row);
 
   add(row: SearchRow) {
     const p = row.properties;
@@ -116,36 +151,48 @@ export function contactTier(
 
 export type ContactMatchResult = { matches: Match[]; compared: number; sharedPhones: number };
 
-// Finds likely duplicate contacts. `companyDomainOf` gives the domain hash
-// of an associated company, when the company window has it.
-export function matchContacts(
+// Similar-name keys per contact in a large block, at most: last name,
+// nickname groups, and one-letter deletions of first and last name.
+const NAME_KEYS_PER_ROW = 24;
+
+// Finds likely duplicate contacts, one blocking key at a time and in passes
+// of bounded size, yielding between slices (see match.ts). `companyDomainOf`
+// gives the domain hash of an associated company, when the company check
+// read it.
+export function* matchContactsSteps(
   store: ContactStore,
   config: ChecksConfig,
   companyDomainOf: (companyId: number) => number = () => 0,
-): ContactMatchResult {
+): Steps<ContactMatchResult> {
   const { sharedPhoneMin, largeOrgMin, blockMax, typoMinLength } = config.duplicates;
   const n = store.size;
-  const companyDomain = new Column();
-  for (let i = 0; i < n; i++) companyDomain.push(store.companyId.get(i) ? companyDomainOf(store.companyId.get(i)) : 0);
+  const rows = allRows(n);
+  const companyDomain = new Column(n);
+  for (let i = 0; i < n; i++) {
+    companyDomain.push(store.companyId.get(i) ? companyDomainOf(store.companyId.get(i)) : 0);
+    if (i % 8192 === 8191) yield;
+  }
 
-  const keyList = (...cols: Column[]) => {
-    const list = new KeyList();
-    for (const col of cols) for (let row = 0; row < n; row++) list.push(col.get(row), row);
-    return list;
+  const column = (col: Column) => byKey((row, push) => push(col.get(row)));
+  const keys = {
+    phone: byKey((row, push) => {
+      push(store.phone1.get(row));
+      if (store.phone2.get(row) !== store.phone1.get(row)) push(store.phone2.get(row));
+    }),
+    emailDomain: column(store.emailDomain),
+    company: column(store.company),
+    companyId: column(store.companyId),
+    companyDomain: column(companyDomain),
   };
-  const blocks = {
-    phone: keyList(store.phone1, store.phone2),
-    emailDomain: keyList(store.emailDomain),
-    company: keyList(store.company),
-    companyId: keyList(store.companyId),
-    companyDomain: keyList(companyDomain),
-  };
-  const shared = blocks.phone.largeKeys(sharedPhoneMin);
+  const passes = { phone: passesFor(2 * n), other: passesFor(n) };
+  const passesOf = (kind: keyof typeof keys) => (kind === "phone" ? passes.phone : passes.other);
+
+  const shared = yield* keysHeldBy(rows, passes.phone, keys.phone, sharedPhoneMin);
   const large = {
-    emailDomain: blocks.emailDomain.largeKeys(largeOrgMin),
-    company: blocks.company.largeKeys(largeOrgMin),
-    companyId: blocks.companyId.largeKeys(largeOrgMin),
-    companyDomain: blocks.companyDomain.largeKeys(largeOrgMin),
+    emailDomain: yield* keysHeldBy(rows, passes.other, keys.emailDomain, largeOrgMin),
+    company: yield* keysHeldBy(rows, passes.other, keys.company, largeOrgMin),
+    companyId: yield* keysHeldBy(rows, passes.other, keys.companyId, largeOrgMin),
+    companyDomain: yield* keysHeldBy(rows, passes.other, keys.companyDomain, largeOrgMin),
   };
 
   const phones = (i: number) => [store.phone1.get(i), store.phone2.get(i)].filter((p) => p && !shared.has(p));
@@ -153,8 +200,8 @@ export function matchContacts(
 
   function compare(i: number, j: number): Match | null {
     const name = nameAgreement(
-      { first: store.first[i], last: store.last[i] },
-      { first: store.first[j], last: store.last[j] },
+      { first: store.first.get(i), last: store.last.get(i) },
+      { first: store.first.get(j), last: store.last.get(j) },
       typoMinLength,
     );
     const nameSignal = NAME_SIGNAL[name];
@@ -183,28 +230,64 @@ export function matchContacts(
   }
 
   // In large blocks, only contacts with similar names are compared: the
-  // same last name, nickname group + last name, or one typo apart.
-  // Hashed, so a large block's sub-groups cost 12 bytes per key.
-  const nameKeys = (i: number): number[] => {
-    const first = store.first[i];
-    const last = store.last[i];
-    if (!last) return [];
-    return [
-      `l:${last}`,
-      ...nicknameGroups(first).map((g) => `n:${g}:${last}`),
-      ...(first.length >= typoMinLength ? deletionVariants(first).map((v) => `f:${v}:${last}`) : []),
-      ...(last.length >= typoMinLength ? deletionVariants(last).map((v) => `t:${first}:${v}`) : []),
-    ].map(hashKey);
+  // same last name, nickname group + last name, or one typo apart. Keys
+  // containing the exact last name go in the pass its hash picks, and keys
+  // containing the exact first name in the pass the first name's hash
+  // picks, so contacts sharing a key always meet in the same pass.
+  // The low 16 bits of each name's hash, worked out once per contact (-1
+  // until then; -2 for no last name), so a pass can skip the contacts that
+  // aren't in it without decoding their names. Pass counts are powers of
+  // two, so the low bits are enough.
+  const lastLow = new Int32Array(n).fill(-1);
+  const firstLow = new Int32Array(n);
+  // The keys are hashKey(`l:${last}`), hashKey(`f:${variant}:${last}`) and
+  // so on, where a variant is the name with one letter left out (or none),
+  // hashed without building the strings. A key two variants share is
+  // pushed once.
+  const pushed: number[] = [];
+  const nameKeys: KeyEmitter = (row, pass, passCount, push) => {
+    if (lastLow[row] === -1) {
+      const last = hashKey(store.last.get(row));
+      lastLow[row] = last ? last % 65536 : -2;
+      firstLow[row] = hashKey(store.first.get(row)) % 65536;
+    }
+    if (lastLow[row] === -2) return;
+    const inLastPass = lastLow[row] % passCount === pass;
+    const inFirstPass = firstLow[row] % passCount === pass;
+    if (!inLastPass && !inFirstPass) return;
+    const last = store.last.get(row);
+    const first = store.first.get(row);
+    pushed.length = 0;
+    const once = (key: number) => {
+      if (pushed.includes(key)) return;
+      pushed.push(key);
+      push(key);
+    };
+    if (inLastPass) {
+      once(hashJoined("l", last, null));
+      for (const g of nicknameGroups(first)) once(hashJoined("n", String(g), last));
+      if (first.length >= typoMinLength) for (let i = -1; i < first.length; i++) once(hashJoined("f", first, last, 1, i));
+    }
+    if (inFirstPass && last.length >= typoMinLength) {
+      for (let i = -1; i < last.length; i++) once(hashJoined("t", first, last, 2, i));
+    }
   };
 
   const found = new MatchSet(n);
-  let compared = 0;
-  for (const [kind, list] of Object.entries(blocks)) {
-    list.forEachBlock((rows, key) => {
+  const counter: Counter = { compared: 0, atYield: 0 };
+  for (const kind of Object.keys(keys) as (keyof typeof keys)[]) {
+    yield* eachBlock(rows, passesOf(kind), keys[kind], function* (members, key) {
       // A shared line pairs unrelated people.
       if (kind === "phone" && shared.has(key)) return;
-      compared += compareBlock(rows, blockMax, nameKeys, (a, b) => found.add(compare(a, b)));
+      yield* compareBlock(members, blockMax, nameKeys, NAME_KEYS_PER_ROW, (a, b) => found.add(compare(a, b)), counter);
     });
   }
-  return { matches: found.all, compared, sharedPhones: shared.size };
+  return { matches: found.all, compared: counter.compared, sharedPhones: shared.size };
 }
+
+// All at once, for tests and small inputs.
+export const matchContacts = (
+  store: ContactStore,
+  config: ChecksConfig,
+  companyDomainOf?: (companyId: number) => number,
+): ContactMatchResult => runSync(matchContactsSteps(store, config, companyDomainOf));

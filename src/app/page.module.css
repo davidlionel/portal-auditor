@@ -61,6 +61,13 @@
   gap: 8px;
 }
 
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
 .label {
   font-weight: 600;
 }

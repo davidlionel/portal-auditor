@@ -139,7 +139,7 @@ describe("request retries", () => {
     const seen: unknown[] = [];
     const t = newTracker({ retry: FAST, sleep: async () => {}, onRetryWait: (w) => seen.push(w) });
     await request(transport, t, "POST", "/search");
-    assert.deepEqual(seen, [{ delayMs: 1000, retry: 1, maxRetries: 5 }]);
+    assert.deepEqual(seen, [{ delayMs: 1000, retry: 1, maxRetries: 5, reason: "rate_limit" }]);
   });
 
   it("stops when the scan is cancelled", async () => {
@@ -149,5 +149,67 @@ describe("request retries", () => {
     const result = await request(transport, newTracker({ signal: controller.signal }), "GET", "/x");
     assert.deepEqual(result, { ok: false, kind: "cancelled" });
     assert.equal(calls(), 0);
+  });
+});
+
+describe("request retries for long reads", () => {
+  const LONG = { retryServerErrors: true, timeoutMs: 50 };
+  const dropped: () => Response = () => {
+    throw new Error("socket hang up");
+  };
+
+  it("retries 502, 503, 504 and dropped connections with the 429 backoff", async () => {
+    const { transport, calls } = scripted([status(502), status(503), status(504), dropped, ok]);
+    const { t, waits } = tracker();
+    const result = await request(transport, t, "GET", "/x", undefined, LONG);
+    assert.equal(result.ok, true);
+    assert.equal(calls(), 5);
+    assert.deepEqual(waits, [1000, 2000, 4000, 8000]);
+    assert.equal(t.retries, 4);
+  });
+
+  it("gives up with hubspot_unavailable once retries run out, and never retries 500", async () => {
+    const down = scripted([status(503)]);
+    const result = await request(down.transport, tracker().t, "GET", "/x", undefined, LONG);
+    assert.deepEqual(result, { ok: false, kind: "hubspot_unavailable", status: 503 });
+    assert.equal(down.calls(), FAST.maxRetries + 1);
+
+    const broken = scripted([status(500), ok]);
+    assert.deepEqual(await request(broken.transport, tracker().t, "GET", "/x", undefined, LONG), {
+      ok: false,
+      kind: "hubspot_unavailable",
+      status: 500,
+    });
+    assert.equal(broken.calls(), 1);
+  });
+
+  it("treats a call that hangs past the timeout as dropped, and retries it", async () => {
+    let call = 0;
+    const transport: Transport = () => (call++ === 0 ? new Promise<Response>(() => {}) : Promise.resolve(ok()));
+    const { t, waits } = tracker();
+    const result = await request(transport, t, "GET", "/x", undefined, LONG);
+    assert.equal(result.ok, true);
+    assert.deepEqual(waits, [1000]);
+  });
+
+  it("says a wait is for a server error, so progress can say so", async () => {
+    const seen: unknown[] = [];
+    const t = newTracker({ retry: FAST, sleep: async () => {}, onRetryWait: (w) => seen.push(w) });
+    await request(scripted([status(502), ok]).transport, t, "GET", "/x", undefined, LONG);
+    assert.deepEqual(seen, [{ delayMs: 1000, retry: 1, maxRetries: 5, reason: "server_error" }]);
+  });
+
+  it("returns cancelled at once when the scan is cancelled mid-call", async () => {
+    const controller = new AbortController();
+    const transport: Transport = () => new Promise<Response>(() => {});
+    const pending = request(transport, newTracker({ signal: controller.signal }), "GET", "/x", undefined, { retryServerErrors: true, timeoutMs: 30_000 });
+    setTimeout(() => controller.abort(), 5);
+    assert.deepEqual(await pending, { ok: false, kind: "cancelled" });
+  });
+
+  it("leaves other calls as they were: a 502 isn't retried without the option", async () => {
+    const { transport, calls } = scripted([status(502), ok]);
+    assert.deepEqual(await request(transport, tracker().t, "GET", "/x"), { ok: false, kind: "hubspot_unavailable", status: 502 });
+    assert.equal(calls(), 1);
   });
 });

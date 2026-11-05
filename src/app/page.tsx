@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { PRODUCT_NAME } from "@/config/product";
-import { liveScanEnabled } from "@/lib/live-scan";
+import { fullScanEnabled, liveScanEnabled } from "@/lib/live-scan";
 import { simulatorEnabled } from "@/lib/simulator/guard";
 import { ConnectForm } from "./connect-form";
 import styles from "./page.module.css";
@@ -60,6 +60,7 @@ export default function Home() {
   // build time; /api/scan checks it again on every request.
   const liveScan = liveScanEnabled();
   const simulator = simulatorEnabled();
+  const fullScan = fullScanEnabled();
 
   if (liveScan) {
     return (
@@ -68,7 +69,7 @@ export default function Home() {
           <h1>{PRODUCT_NAME}</h1>
           <p className={styles.pitch}>{PITCH}</p>
         </header>
-        <ConnectForm liveScan simulatorAvailable={simulator} after={<ScopeSummary />}>
+        <ConnectForm liveScan simulatorAvailable={simulator} fullScanAvailable={fullScan} after={<ScopeSummary />}>
           <ScopesHelp />
           <p className={styles.note}>
             <Link className={styles.recordLink} href="/demo">
@@ -130,7 +131,7 @@ export default function Home() {
 
       <ScopeSummary />
 
-      {simulator && <ConnectForm liveScan={false} simulatorAvailable />}
+      {simulator && <ConnectForm liveScan={false} simulatorAvailable fullScanAvailable={fullScan} />}
     </main>
   );
 }

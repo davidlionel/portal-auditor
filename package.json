@@ -13,7 +13,8 @@
     "demo:snapshot": "tsx --env-file-if-exists=.env.local scripts/demo-snapshot.ts",
     "check:deploy": "tsx tests/prod/deployed.ts",
     "check:hubspot-docs": "tsx scripts/check-hubspot-sources.ts",
-    "bench:dedupe": "tsx --expose-gc tests/scale/dedupe-memory.ts"
+    "bench:dedupe": "tsx --expose-gc tests/scale/dedupe-memory.ts",
+    "test:full-scan": "tsx --expose-gc tests/scale/full-scan.ts"
   },
   "dependencies": {
     "@hubspot/api-client": "^14.0.1",

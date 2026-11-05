@@ -17,7 +17,7 @@ const KEY = "pat-na1-00000000-0000-0000-0000-SCALETESTKEY";
 const logs: string[] = [];
 console.info = (...args: unknown[]) => void logs.push(args.join(" "));
 
-let stats: SimulatorStats = { requests: 0, rateLimited: 0 };
+let stats: SimulatorStats = { requests: 0, rateLimited: 0, listCalls: 0, serverErrors: 0 };
 const deps = {
   liveScanEnabled: () => true,
   // The real-key path, answered by the simulator instead of HubSpot.
@@ -30,6 +30,7 @@ const deps = {
   loadSimulator: async () => {
     throw new Error("not used");
   },
+  fullScanEnabled: () => false,
 };
 
 type Timed = { at: number; event: ScanStreamEvent };

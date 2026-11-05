@@ -17,6 +17,23 @@ export const SIZE_250K: PortalSize = {
   segments: 500,
 };
 
+// For the full duplicate scan: half a million and a million contacts.
+export const SIZE_500K: PortalSize = {
+  records: { contacts: 500_000, companies: 60_000, deals: 30_000 },
+  customProperties: SIZE_250K.customProperties,
+  segments: 500,
+};
+
+export const SIZE_1M: PortalSize = {
+  records: { contacts: 1_000_000, companies: 120_000, deals: 60_000 },
+  customProperties: SIZE_250K.customProperties,
+  segments: 500,
+};
+
+// Record IDs: the base plus the record's index, so ascending ID order is
+// index order. Index 0 is the most recently created.
+export const ID_BASE: Record<ObjectType, number> = { contacts: 100_000_000, companies: 200_000_000, deals: 300_000_000 };
+
 export const SIZE_SMALL: PortalSize = {
   records: { contacts: 900, companies: 120, deals: 60 },
   customProperties: { contacts: 12, companies: 6, deals: 4 },
@@ -152,9 +169,10 @@ export function createPortal(size: PortalSize = SIZE_250K, now = Date.now()) {
   // every tier and the cases that must not match. See contactRecord and
   // companyRecord.
   function record(objectType: ObjectType, index: number): { id: string; properties: Record<string, string | null> } {
-    if (objectType === "contacts") return { id: String(100_000_000 + index), properties: contactRecord(index) };
-    if (objectType === "companies") return { id: String(200_000_000 + index), properties: companyRecord(index) };
-    return { id: String(300_000_000 + index), properties: {} };
+    const id = String(ID_BASE[objectType] + index);
+    if (objectType === "contacts") return { id, properties: contactRecord(index) };
+    if (objectType === "companies") return { id, properties: companyRecord(index) };
+    return { id, properties: {} };
   }
 
   // IDs for records matching a check's filters, spread across the index range.
@@ -249,6 +267,8 @@ const phone = (n: number) => `+1 (555) ${String(1_000_000 + n).slice(-7, -4)}-${
 //   %1000 = 700 the one before's sibling: same last name and home phone (no match)
 //   0-19        twenty colleagues on one switchboard number (no match)
 //   %250 = 7    a typo email domain
+//   %20000 = 13000  the same person as contact index - 12,000 (High), which
+//               only a full duplicate scan sees: it's outside the newest 10,000
 function contactRecord(index: number): Record<string, string | null> {
   const before = index - 1;
   const base = (n: number) => ({
@@ -271,6 +291,7 @@ function contactRecord(index: number): Record<string, string | null> {
   if (index % 300 === 210) return { ...base(before), firstname: null, lastname: null, email: p.email, associatedcompanyid: null };
   if (index % 500 === 333) return { ...p, firstname: null, lastname: base(before).lastname, phone: phone(before), associatedcompanyid: null };
   if (index % 1000 === 700) return { ...p, lastname: base(before).lastname, phone: phone(before), associatedcompanyid: null };
+  if (index % 20_000 === 13_000) return { ...base(index - 12_000), email: p.email };
   return p;
 }
 
@@ -281,6 +302,8 @@ function contactRecord(index: number): Record<string, string | null> {
 //   %100 = 30   a subdomain of the one before's domain (Medium)
 //   %100 = 70   no domain, the one before's name and city (Medium)
 //   %250 = 90   no domain or city, the one before's name and state (Low)
+//   %10000 = 9920, from 10,000 on: company index - 9,800's domain (High),
+//               which only a full duplicate scan sees
 function companyRecord(index: number): Record<string, string | null> {
   const before = index - 1;
   const own = {
@@ -299,5 +322,6 @@ function companyRecord(index: number): Record<string, string | null> {
   if (index % 100 === 30) return { ...own, domain: `eu.company${before}.example` };
   if (index % 100 === 70) return { ...own, domain: null, name: `Company ${before}`, city: `City ${before % 400}`, state: `State ${before % 50}`, zip: null };
   if (index % 250 === 90) return { ...own, domain: null, name: `Company ${before}`, city: null, zip: null, state: `State ${before % 50}` };
+  if (index >= 10_000 && index % 10_000 === 9_920) return { ...own, domain: `company${index - 9_800}.example` };
   return own;
 }

@@ -22,6 +22,7 @@ function deps(overrides: Partial<ScanStreamDeps> = {}) {
     },
     simulatorEnabled: () => false,
     loadSimulator: async () => simulatorTransport({ size: SIZE_SMALL, rateLimits: "none" }).transport,
+    fullScanEnabled: () => true,
     scanOptions: { config: { ...CHECKS_CONFIG, searchMinIntervalMs: 0 } },
     ...overrides,
   };

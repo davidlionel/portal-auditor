@@ -38,6 +38,8 @@ export function createProgress(options: ProgressOptions) {
   let checksPlanned = 0;
   // Calls done when the checks began; null during setup.
   let checksFrom: number | null = null;
+  // Planned steps that aren't HubSpot calls (duplicate matching), done so far.
+  let advanced = 0;
   let shown = 0;
   let phase = "Starting";
   let detail: string | undefined;
@@ -46,7 +48,7 @@ export function createProgress(options: ProgressOptions) {
   function percent(): number {
     const { calls, retries } = counts();
     // Retries are extra attempts at planned calls, not progress.
-    const done = calls - retries;
+    const done = calls - retries + advanced;
     const raw =
       checksFrom === null
         ? setupPlanned > 0
@@ -78,7 +80,7 @@ export function createProgress(options: ProgressOptions) {
     // Setup is done and has counted the checks' calls.
     beginChecks(calls: number) {
       const { calls: made, retries } = counts();
-      checksFrom = made - retries;
+      checksFrom = made - retries + advanced;
       checksPlanned += Math.max(0, calls);
     },
     phase(name: string, newDetail?: string) {
@@ -90,15 +92,18 @@ export function createProgress(options: ProgressOptions) {
       detail = newDetail;
       send();
     },
+    // Planned work other than HubSpot calls, done.
+    advance(steps: number) {
+      advanced += Math.max(0, steps);
+      send();
+    },
     // After each HubSpot call.
     tick() {
       send();
     },
-    waiting(delayMs: number, retry: number, maxRetries: number) {
-      send(
-        { detail: `HubSpot rate limit: retrying in ${Math.ceil(delayMs / 1000)}s (${retry} of ${maxRetries})`, waitingMs: delayMs },
-        true,
-      );
+    waiting(delayMs: number, retry: number, maxRetries: number, reason: "rate_limit" | "server_error" = "rate_limit") {
+      const why = reason === "rate_limit" ? "HubSpot rate limit" : "HubSpot didn't respond";
+      send({ detail: `${why}: retrying in ${Math.ceil(delayMs / 1000)}s (${retry} of ${maxRetries})`, waitingMs: delayMs }, true);
     },
     finish(name = "Done") {
       phase = name;

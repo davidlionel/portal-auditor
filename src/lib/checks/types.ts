@@ -44,6 +44,9 @@ export type Finding = {
   // Segment checks: affected segments for the segments CSV, up to the
   // work-list cap.
   segments?: SegmentRow[];
+  // Duplicate and email checks: which records were checked, e.g. "Checked
+  // the newest 10,000 of 500,000 contacts."
+  coverage?: string;
   // Duplicate checks: the most common signal combinations and how many
   // groups each matched.
   matchSummary?: { signals: string; groups: number }[];

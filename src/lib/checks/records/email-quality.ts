@@ -18,15 +18,21 @@ export function hasMalformedEmail(row: SearchRow, config: ChecksConfig = CHECKS_
 }
 
 // The finding for the contacts whose email failed, out of `population` read.
-export function malformedEmailFinding(ids: string[], population: number, config: ChecksConfig = CHECKS_CONFIG): Finding[] {
-  if (!ids.length) return [];
+// `ids` may be capped; `count` is how many failed in all.
+export function malformedEmailFinding(
+  ids: string[],
+  population: number,
+  config: ChecksConfig = CHECKS_CONFIG,
+  count = ids.length,
+): Finding[] {
+  if (!count) return [];
   return [
     {
       ...MALFORMED_EMAIL,
       category: CATEGORY_FOR_OBJECT.contacts,
       objectType: "contacts",
-      count: ids.length,
-      affected: ids.length,
+      count,
+      affected: count,
       population,
       samples: [],
       recordSamples: ids.slice(0, config.sampleCap).map((id) => [id]),

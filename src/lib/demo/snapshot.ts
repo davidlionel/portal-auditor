@@ -16,12 +16,12 @@ const ALLOWED_KEYS = {
   snapshot: ["scannedAt", "appVersion", "report"],
   report: [
     "scannedAt", "portal", "scannedObjects", "notes", "findings", "checks", "score",
-    "apiCalls", "retries", "durationMs", "simulated", "incomplete",
+    "apiCalls", "retries", "durationMs", "simulated", "fullDuplicates", "incomplete",
   ],
   portal: ["portalId", "accountType", "timeZone", "companyCurrency", "uiDomain", "dataHostingLocation"],
   finding: [
     "checkId", "title", "category", "objectType", "severity", "count", "affected", "population",
-    "samples", "items", "recordSamples", "records", "segments", "matchSummary", "scored", "why", "fix",
+    "samples", "items", "recordSamples", "records", "segments", "coverage", "matchSummary", "scored", "why", "fix",
   ],
   record: ["id", "group", "signals"],
   segment: ["id", "name", "group", "detail"],
@@ -36,6 +36,9 @@ const RECORD_ID = /^\d+$/;
 // A segment finding's line starts with the segment's ID and quoted name:
 // 74 "Audit Test Empty Static" (static).
 const SEGMENT_ITEM = /^\d+ ".*"/;
+// What a duplicate or email check covered: counts and fixed wording only.
+const COVERAGE =
+  /^Checked (all [\d,]+|the newest [\d,]+ of [\d,]+|[\d,]+ of [\d,]+) (contacts|companies)(, before (HubSpot's rate limit|an error from HubSpot) stopped the read)?\.( Not scored: the read didn't finish\.)?$/;
 const EMAIL = /[^\s@]+@[^\s@]+/;
 // Phone-shaped text such as "(415) 555-0142" or "+44 20 7946 0958". Record
 // IDs are plain digit strings and are checked separately.
@@ -84,6 +87,7 @@ export function validateSnapshot(snapshot: unknown): string[] {
   if (!keys(report, ALLOWED_KEYS.report, "report")) return errors;
 
   if (report.simulated !== false) errors.push("report comes from the simulator, not a real portal");
+  if (report.fullDuplicates !== undefined && report.fullDuplicates !== true) errors.push("report.fullDuplicates isn't true");
   if (keys(report.portal, ALLOWED_KEYS.portal, "report.portal") && report.portal.accountType !== "DEVELOPER_TEST") {
     errors.push(`report.portal is a ${String(report.portal.accountType)} account, not a developer test portal`);
   }
@@ -94,6 +98,9 @@ export function validateSnapshot(snapshot: unknown): string[] {
     const where = `report.findings[${i}]`;
     if (!keys(f, ALLOWED_KEYS.finding, where)) return;
     if (f.segments !== undefined && f.category !== "Segments") errors.push(`${where} lists segments but isn't a segment finding`);
+    if (f.coverage !== undefined && (typeof f.coverage !== "string" || !COVERAGE.test(f.coverage))) {
+      errors.push(`${where}.coverage isn't a coverage line`);
+    }
     if (f.category === "Segments") {
       if (f.recordSamples !== undefined || f.records !== undefined) errors.push(`${where} is a segment finding with records`);
       const rows = Array.isArray(f.segments) ? f.segments : [];

@@ -8,3 +8,10 @@ export function liveScanEnabled(env: Record<string, string | undefined> = proces
   if (env.ENABLE_LIVE_SCAN === "false") return false;
   return !env.VERCEL;
 }
+
+// A full duplicate scan of a large portal runs for half an hour or more, so
+// it's only offered where a request can run that long: not on Vercel, whose
+// functions stop after a few minutes (the scan route asks for 300 seconds).
+export function fullScanEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return !env.VERCEL;
+}

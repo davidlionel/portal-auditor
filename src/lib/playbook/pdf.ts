@@ -75,7 +75,7 @@ function sectionContent(s: Section): Content[] {
       unbreakable: true,
       margin: [0, 14, 0, 4],
     },
-    { text: [{ text: "What's wrong: ", bold: true }, t(`${s.rate}.`)] },
+    { text: [{ text: "What's wrong: ", bold: true }, t(`${s.rate}.${s.coverage ? ` ${s.coverage}` : ""}`)] },
     { text: [{ text: "Why it matters: ", bold: true }, t(s.why)], margin: [0, 2, 0, 0] },
     heading("How to fix it in HubSpot", "h3"),
     { ol: s.steps.map(stepItem) },
