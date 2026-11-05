@@ -6,7 +6,7 @@ import { handleScanRequest, type ScanStreamDeps } from "@/lib/scan-stream";
 import { SIZE_1M, SIZE_SMALL } from "@/lib/simulator/portal";
 import { simulatorTransport } from "@/lib/simulator/transport";
 
-const KEY = "pat-na1-11111111-2222-3333-4444-ESTIMATEKEYNOLOG";
+const KEY = "dummy-key-ESTIMATEKEYNOLOG";
 const logged: string[] = [];
 console.info = (...args: unknown[]) => void logged.push(args.join(" "));
 

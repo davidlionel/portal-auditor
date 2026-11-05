@@ -35,7 +35,7 @@ describe("live scanning setting", () => {
         new Request("http://localhost/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: "pat-na1-00000000-0000-0000-0000-000000000000" }),
+          body: JSON.stringify({ token: "dummy-key-not-a-real-key" }),
         }),
       );
       assert.equal(response.status, 403);

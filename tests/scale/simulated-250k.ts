@@ -12,7 +12,7 @@ import { simulatorTransport, type SimulatorStats } from "@/lib/simulator/transpo
 // The README's estimate before this test existed.
 const ESTIMATE = { calls: 445, seconds: 110 };
 // A fake key, sent the way a real one is, to prove it never leaks.
-const KEY = "pat-na1-00000000-0000-0000-0000-SCALETESTKEY";
+const KEY = "dummy-key-SCALETESTKEY";
 
 const logs: string[] = [];
 console.info = (...args: unknown[]) => void logs.push(args.join(" "));

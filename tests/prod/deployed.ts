@@ -60,13 +60,13 @@ async function main() {
     demoHtml.includes("Download playbook (PDF)") && demoHtml.includes("Download everything (ZIP)"),
   ]);
 
-  const live = await scan({ token: "pat-na1-00000000-0000-0000-0000-000000000000" });
+  const live = await scan({ token: "dummy-key-not-a-real-key" });
   results.push(["scan endpoint refuses a service key (403)", live.status === 403 && /sample report only/.test(live.text)]);
   const simulated = await scan({ mode: "simulated" });
   results.push(["scan endpoint refuses the simulator (403)", simulated.status === 403]);
-  const full = await scan({ token: "pat-na1-00000000-0000-0000-0000-000000000000", fullDuplicates: true });
+  const full = await scan({ token: "dummy-key-not-a-real-key", fullDuplicates: true });
   results.push(["scan endpoint refuses a full duplicate scan (403)", full.status === 403]);
-  const estimate = await scan({ token: "pat-na1-00000000-0000-0000-0000-000000000000", fullDuplicates: true }, "/api/scan/estimate");
+  const estimate = await scan({ token: "dummy-key-not-a-real-key", fullDuplicates: true }, "/api/scan/estimate");
   results.push(["full scan estimate refuses a service key (403)", estimate.status === 403]);
 
   // Every script the two pages load.

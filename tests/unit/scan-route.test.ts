@@ -5,7 +5,7 @@ import { handleScanRequest, type ScanStreamDeps, type ScanStreamEvent } from "@/
 import { SIZE_SMALL } from "@/lib/simulator/portal";
 import { simulatorTransport } from "@/lib/simulator/transport";
 
-const KEY = "pat-na1-11111111-2222-3333-4444-TESTKEYDONOTLOG";
+const KEY = "dummy-key-TESTKEYDONOTLOG";
 
 // Captures console output so tests can check the key never reaches logs.
 const logged: string[] = [];

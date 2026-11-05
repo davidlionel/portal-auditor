@@ -18,7 +18,7 @@ import { HEARTBEAT_MS, handleScanRequest, type ScanStreamEvent } from "@/lib/sca
 import { SIZE_1M, SIZE_250K, SIZE_500K, type PortalSize } from "@/lib/simulator/portal";
 import { simulatorTransport, type SimulatorStats } from "@/lib/simulator/transport";
 
-const KEY = "pat-na1-00000000-0000-0000-0000-FULLSCANKEY0";
+const KEY = "dummy-key-FULLSCANKEY0";
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
 const value = (name: string) => {
